@@ -6,6 +6,22 @@ using System.Text.Json.Nodes;
 namespace RockfaxApi;
 
 /// <summary>
+/// Wire transport used for API requests. The API's Cloudflare bot management challenges
+/// .NET's managed TLS fingerprint, so the default is the OS-native WinHTTP stack.
+/// </summary>
+public enum RockfaxTransport
+{
+    /// <summary>Windows WinHTTP API, in-process (default on Windows). Passes Cloudflare.</summary>
+    WinHttp,
+
+    /// <summary>Plain .NET SocketsHttpHandler — simplest, but currently challenged (403) by the API's Cloudflare.</summary>
+    Managed,
+
+    /// <summary>Shell out to the OS curl.exe binary — passes Cloudflare, but spawns a process per request.</summary>
+    Curl,
+}
+
+/// <summary>
 /// Unofficial .NET client for the Rockfax / UKClimbing app API, replicated from the
 /// Rockfax Android app (com.rockfax.rockfax.rockfax, class com.rockfax.rockfax.ukcapi.php.UKCAPI).
 ///
@@ -60,7 +76,7 @@ public sealed class RockfaxClient : IDisposable
     public bool IsLoggedIn => !string.IsNullOrEmpty(AccessToken);
 
     public RockfaxClient(string? deviceId = null, string? baseUrl = null, string? nodeBaseUrl = null, HttpClient? http = null,
-                         bool preferCurlTransport = true)
+                         RockfaxTransport transport = RockfaxTransport.WinHttp)
     {
         BaseUrl = (baseUrl ?? DefaultBaseUrl).TrimEnd('/');
         NodeBaseUrl = (nodeBaseUrl ?? DefaultNodeBaseUrl).TrimEnd('/');
@@ -73,20 +89,21 @@ public sealed class RockfaxClient : IDisposable
         {
             handler = new PassthroughHandler(http);
         }
-        else if (preferCurlTransport && CurlHttpHandler.IsAvailable)
-        {
-            // The API's Cloudflare bot management challenges .NET's TLS fingerprint;
-            // the OS curl binary is served normally. See CurlHttpHandler remarks.
-            handler = new CurlHttpHandler();
-        }
         else
         {
-            handler = new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All };
+            handler = transport switch
+            {
+                // Default: WinHTTP passes the API's Cloudflare TLS-fingerprint gate in-process.
+                RockfaxTransport.WinHttp when OperatingSystem.IsWindows() => new WinHttpTransport(UserAgent),
+                // Opt-in fallback: OS curl binary (no fingerprint issue, but spawns a process).
+                RockfaxTransport.Curl => new CurlHttpHandler(),
+                _ => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All },
+            };
         }
 
         _http = http ?? new HttpClient(handler);
         _ownsHttp = true;
-        _http.Timeout = Timeout.InfiniteTimeSpan; // per-request timeout lives in the handler (curl --max-time / 300s)
+        _http.Timeout = Timeout.InfiniteTimeSpan; // per-request timeout lives in the transport (300s, matching the app)
         _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
     }
 

@@ -40,9 +40,7 @@ using var client = new RockfaxClient();
 using var doc = await client.GetFreeCragsAsync();
 ```
 
-Windows note: the default transport shells out to `curl.exe` (see
-[Transport / Cloudflare](#transport--cloudflare) below) — on stock Windows 10/11 it is
-already in `System32`.
+Fully self-contained on Windows: the default WinHTTP transport needs no external binaries.
 
 ## How the API works
 
@@ -144,14 +142,22 @@ outside this client's scope; only the REST API above is replicated.
 - .NET's `SocketsHttpHandler` receives a managed challenge (`403`, `cf-mitigated: challenge`)
   for **every** request, regardless of headers, HTTP version or TLS version — the TLS
   fingerprint is what's scored.
-- curl's stock Schannel TLS is served normally, **provided** the request carries the
-  app's User-Agent (`okhttp/3.8.0` — the version bundled in the APK).
-- No fingerprint impersonation is used here: `RockfaxClient` defaults to
-  `CurlHttpHandler`, which shells out to the Windows-bundled `curl.exe`
-  (`C:\Windows\System32\curl.exe`) as a plain `HttpMessageHandler`. All signing,
-  tokens and JSON handling stay in C#. Pass `preferCurlTransport: false` or your own
-  `HttpClient` to use the managed stack instead (e.g. if Cloudflare policy changes or
-  you route through your own proxy).
+- Windows' native WinHTTP stack (and curl's Schannel TLS) are served normally, **provided**
+  the request carries the app's User-Agent (`okhttp/3.8.0` — the version bundled in the APK).
+- Nothing here forges or impersonates a fingerprint: the default transport is
+  `WinHttpTransport`, a thin P/Invoke wrapper over the OS `winhttp.dll` — fully
+  in-process, no external binaries, no subprocesses. Alternatives via the
+  `RockfaxTransport` enum: `Managed` (plain `SocketsHttpHandler`; currently challenged)
+  and `Curl` (spawns the Windows-bundled `curl.exe`; kept as a fallback).
+
+```csharp
+// default: WinHTTP (Windows)
+using var client = new RockfaxClient();
+
+// opt-in alternatives
+using var curl   = new RockfaxClient(transport: RockfaxTransport.Curl);
+using var managed = new RockfaxClient(transport: RockfaxTransport.Managed);
+```
 
 ## Usage
 
