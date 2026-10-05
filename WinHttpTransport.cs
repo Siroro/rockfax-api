@@ -52,7 +52,7 @@ public sealed class WinHttpTransport : HttpMessageHandler
     private static extern bool WinHttpReceiveResponse(IntPtr request, IntPtr reserved);
 
     [DllImport("winhttp.dll", SetLastError = true)]
-    private static extern bool WinHttpQueryHeaders(IntPtr request, int infoLevel, IntPtr name, byte[] buffer, ref int bufferLength, IntPtr index);
+    private static extern bool WinHttpQueryHeaders(IntPtr request, int infoLevel, IntPtr name, byte[]? buffer, ref int bufferLength, IntPtr index);
 
     [DllImport("winhttp.dll", SetLastError = true)]
     private static extern bool WinHttpQueryDataAvailable(IntPtr request, out int available);
@@ -189,7 +189,7 @@ public sealed class WinHttpTransport : HttpMessageHandler
 
         // Full raw header block: preserves every line, including repeated Set-Cookie.
         int rawSize = 0;
-        WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_RAW_HEADERS_CRLF, IntPtr.Zero, null!, ref rawSize, IntPtr.Zero);
+        WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_RAW_HEADERS_CRLF, IntPtr.Zero, null, ref rawSize, IntPtr.Zero);
         var response = new HttpResponseMessage((HttpStatusCode)statusCode) { RequestMessage = request };
         if (rawSize > 0)
         {

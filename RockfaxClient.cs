@@ -231,9 +231,13 @@ public sealed class RockfaxClient : IDisposable
             ?? throw new RockfaxApiException($"Route info for id {routeId} could not be parsed.", null, null);
     }
 
-    /// <summary>GET {key}/logbook/v1/app_search_route_ukc/{query} — search UKC routes by name.</summary>
+    /// <summary>GET {key}/logbook/v1/app_search_route_ukc/{query} — search UKC routes by name.
+    /// The key input is the URL-encoded query (the server hashes the path segment as received).</summary>
     public Task<JsonDocument> SearchRoutesAsync(string query, CancellationToken ct = default)
-        => GetAsync($"logbook/{V1}/app_search_route_ukc/{Uri.EscapeDataString(query)}", keyInput: query, ct: ct);
+    {
+        string encoded = Uri.EscapeDataString(query);
+        return GetAsync($"logbook/{V1}/app_search_route_ukc/{encoded}", keyInput: encoded, ct: ct);
+    }
 
     /// <summary>GET {key}/logbook/v2/weather_{site}/{ids} — note: the app calls this one with v2.</summary>
     public Task<JsonDocument> GetWeatherAsync(IReadOnlyCollection<int> cragIds, Site site = Site.Rockfax, CancellationToken ct = default)

@@ -72,7 +72,7 @@ key = "and_" + md5(keyInput + "lfoengoir").substring(17, 29)
 | `"userID=<id>"` | wishlist, partners, logbook route details |
 | `"userID=<id>&t=<unixtime>"` | logbook |
 | `"<routeId>"` | route info, crag routes |
-| raw search text | route search |
+| URL-encoded search text | route search |
 
 ### 2. Auth headers (logged-in requests)
 
@@ -176,6 +176,19 @@ await client.AddAscentsAsync(client.UserId, new[]
 {
     new AscentUpload { RouteUkcId = 52150, StyleId = 20, AscentDate = "2026-10-05", Notes = "great" },
 });
+```
+
+## Desktop app
+
+`RockfaxDesk` is a small WinForms front-end (net8.0-windows) built on the library:
+
+- route search with clickable results and route descriptions/FA/height/pitches,
+- all UKC crag markers and the free-sample crag list,
+- UKClimbing login + a dump of your logbook.
+
+```bash
+dotnet run --project RockfaxDesk            # GUI
+dotnet run --project RockfaxDesk -- --self-test   # headless end-to-end check against the live API
 ```
 
 Console demo (`RockfaxApi.Demo`):

@@ -9,9 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The demo project lives in a subfolder; keep it out of the library compile. -->
+    <!-- The demo and desktop projects live in subfolders; keep them out of the library compile. -->
     <Compile Remove="RockfaxApi.Demo/**" />
+    <Compile Remove="RockfaxDesk/**" />
     <None Remove="RockfaxApi.Demo/**" />
+    <None Remove="RockfaxDesk/**" />
   </ItemGroup>
 
 </Project>
