@@ -29,7 +29,7 @@ public sealed class WinHttpTransport : HttpMessageHandler
     private const int WINHTTP_QUERY_STATUS_CODE = 19;
     private const int WINHTTP_QUERY_RAW_HEADERS_CRLF = 22;
     private const int WINHTTP_OPTION_REDIRECT_POLICY = 88;
-    private const int WINHTTP_OPTION_REDIRECT_POLICY_NEVER = 0;
+    private const int WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP = 2;
 
     [DllImport("winhttp.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr WinHttpOpen(string userAgent, int accessType, IntPtr proxy, IntPtr proxyBypass, int flags);
@@ -113,8 +113,10 @@ public sealed class WinHttpTransport : HttpMessageHandler
                 uri.Scheme == "https" ? WINHTTP_FLAG_SECURE : 0);
             if (hRequest == IntPtr.Zero) throw WinHttpError("WinHttpOpenRequest");
 
-            int neverRedirect = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
-            WinHttpSetOption(hRequest, WINHTTP_OPTION_REDIRECT_POLICY, ref neverRedirect, sizeof(int));
+            // Follow redirects (the photo CDN 301s cdn.ukc2.com -> ukc2.com) but never
+            // downgrade https -> http. API endpoints never redirect.
+            int redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
+            WinHttpSetOption(hRequest, WINHTTP_OPTION_REDIRECT_POLICY, ref redirectPolicy, sizeof(int));
 
             // Copy caller headers. WinHTTP owns Host; SendRequest owns Content-Length.
             var headerBuilder = new StringBuilder();

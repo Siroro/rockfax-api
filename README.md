@@ -180,16 +180,26 @@ await client.AddAscentsAsync(client.UserId, new[]
 
 ## Desktop app
 
-`RockfaxDesk` is a small WinForms front-end (net8.0-windows) built on the library:
+`RockfaxDesk` is a WinForms front-end (net8.0-windows) built on the library:
 
-- route search with clickable results and route descriptions/FA/height/pitches,
-- all UKC crag markers and the free-sample crag list,
-- UKClimbing login + a dump of your logbook.
+- **Route pages** — description, first ascent, height/pitches, community comments,
+  and a photo strip (thumbnails from cdn.ukc2.com, click for full size).
+- **Crag pages** — grade distribution (green/orange/red/black), the full route list
+  (double-click any route), a weather forecast strip, and crag photos.
+- **Crag map** — every one of the ~26,600 UKC crags as a pannable, zoomable dot plot;
+  hover for names, click a dot to open the crag. Free-sample crags highlight in orange.
+- **Search & lists** — route search, crag name filter, busiest-crags list, free crags.
+- **Logbook** — log in with your UKClimbing account to browse your ascents
+  (with style names) and wishlist; double-click an ascent to open the route.
+- **Top 10** — the weekly top-ten photo grid.
 
 ```bash
 dotnet run --project RockfaxDesk            # GUI
 dotnet run --project RockfaxDesk -- --self-test   # headless end-to-end check against the live API
 ```
+
+The self-test exercises every data path the UI uses (search, route info, comments,
+crag routes, weather, photo metadata, a CDN thumbnail download, top-10, form construction).
 
 Console demo (`RockfaxApi.Demo`):
 
