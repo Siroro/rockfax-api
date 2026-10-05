@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <Description>Unofficial C# client for the Rockfax / UKClimbing app API (reverse engineered from the Rockfax Android app).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The demo project lives in a subfolder; keep it out of the library compile. -->
+    <Compile Remove="RockfaxApi.Demo/**" />
+    <None Remove="RockfaxApi.Demo/**" />
+  </ItemGroup>
+
+</Project>
