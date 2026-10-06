@@ -526,8 +526,8 @@ public sealed class MainForm : Form
 
     private async Task RunSafe(Func<Task> work)
     {
-        try { await work(); }
-        catch (Exception ex) { _lblStatus.Text = $"failed: {ex.GetType().Name} — {ex.Message}"; }
+        try { await work(); _lblStatus.ForeColor = Ui.Muted; }
+        catch (Exception ex) { FailStatus($"failed: {ex.GetType().Name} — {ex.Message}"); }
     }
 
     private async Task RunAsync(string what, Func<Task> work)
@@ -535,13 +535,22 @@ public sealed class MainForm : Form
         try
         {
             _lblStatus.Text = $"{what}…";
+            _lblStatus.ForeColor = Ui.Muted;
             await work();
             _lblStatus.Text = $"{what} — done";
+            _lblStatus.ForeColor = Ui.Muted;
         }
         catch (Exception ex)
         {
-            _lblStatus.Text = $"{what} — failed: {ex.GetType().Name}: {ex.Message}";
+            FailStatus($"{what} — failed: {ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    /// <summary>Failures stand out in red until the next successful operation.</summary>
+    private void FailStatus(string message)
+    {
+        _lblStatus.Text = message;
+        _lblStatus.ForeColor = Ui.Red;
     }
 
     private void SetLeftItems(IEnumerable<(ListViewItem Item, string Key)> items, string header, string count)

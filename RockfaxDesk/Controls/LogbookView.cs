@@ -86,6 +86,9 @@ internal sealed class LogbookView : UserControl
                 RouteRequested?.Invoke(r);
         };
 
+        _lvAscents.MouseUp += (_, e) => ShowRouteMenu(_lvAscents, e);
+        _lvWishlist.MouseUp += (_, e) => ShowRouteMenu(_lvWishlist, e);
+
         var titleRow = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Ui.Bg, Padding = new Padding(10, 6, 10, 0) };
         var export = Ui.Button("Export CSV", 100);
         export.Dock = DockStyle.Right;
@@ -179,6 +182,25 @@ internal sealed class LogbookView : UserControl
 
     /// <summary>One RFC-4180 field: always quoted, embedded quotes doubled.</summary>
     internal static string CsvField(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+
+    /// <summary>Right-click on a logbook/wishlist row: open, UKC page, copy link.</summary>
+    private void ShowRouteMenu(UiList list, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Right) return;
+        ListViewItem? hit = list.HitTest(e.Location).Item;
+        if (hit?.Tag is not RouteSummary route) return;
+        hit.Selected = true;
+        string url = $"https://www.ukclimbing.com/logbook/route.php?id={route.UkcId}";
+        Ui.Menu(
+            ("Open route", () => RouteRequested?.Invoke(route)),
+            ("Open on UKC ↗", () => Jx.OpenBrowser(url)),
+            ("Copy UKC link", () =>
+            {
+                try { Clipboard.SetText(url); _lblStatus.Text = "link copied to the clipboard"; }
+                catch { _lblStatus.Text = "clipboard is busy — try again"; }
+            })
+        ).Show(list, e.Location);
+    }
 
     /// <summary>Summary chips above the ascent list: totals, this year, distinct crags, hardest.</summary>
     private void UpdateStats()

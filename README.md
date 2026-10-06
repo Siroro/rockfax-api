@@ -210,10 +210,14 @@ drive it headlessly for captures):
   double-click any ascent or wishlist entry to open the route.
 - **Top 10** — the weekly photo grid with rank badges and ratings, refreshable.
 - **Shell** — hover-highlighted lists, a loading spinner in the status bar, buttons
-  lock while a request is in flight, failures render in red, window/splitter
-  geometry persists across runs, and a "?" About box lists attribution + shortcuts.
-- Keyboard: **Ctrl+F** focuses search, **Enter** searches/opens, **Esc** clears,
-  **F5** refreshes the current route/crag/list.
+  lock while a request is in flight, failures render in red until the next success,
+  window/splitter/map geometry and your last search persist across runs, right-click
+  menus on every list (open · show on map · open on UKC · copy link), and a "?"
+  About box lists attribution + shortcuts.
+- Keyboard: **Ctrl+F** focuses search, **Ctrl+1–5** switches tabs, **Enter**
+  searches/opens, **Esc** clears, **F5** refreshes the current route/crag/list,
+  and the map (once clicked) pans with the **arrow keys**, zooms with **+/−**
+  and resets with **Home**.
 
 ```bash
 dotnet run --project RockfaxDesk            # GUI
