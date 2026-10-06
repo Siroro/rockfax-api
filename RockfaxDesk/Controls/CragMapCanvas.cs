@@ -579,13 +579,19 @@ internal sealed class CragMapCanvas : Control
 }
 
 /// <summary>
-/// LRU cache + background fetcher for 256px raster tiles (CARTO dark_all, which is
-/// built on OpenStreetMap data). Failed tiles are retried on the next paint pass.
+/// LRU cache + background fetcher for 256px raster tiles (OpenStreetMap, darkened
+/// on decode). Successful tiles are also persisted to a per-user disk cache, so
+/// revisited views paint instantly and OSM sees fewer requests (policy-friendly).
+/// Failed tiles are retried on the next paint pass.
 /// </summary>
 internal sealed class TileCache : IDisposable
 {
     private const string UrlTemplate = "https://tile.openstreetmap.org/{0}/{1}/{2}.png";
     private const int Cap = 600;
+    private const long DiskCapBytes = 192L * 1024 * 1024;
+
+    private static readonly string DiskDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RockfaxDesk", "tiles");
 
     // OSM tile policy requires an identifying User-Agent.
     private readonly HttpClient _http = new(new WinHttpTransport("RockfaxExplorer/1.0 (github.com/Siroro/rockfax-api)", TimeSpan.FromSeconds(20)))
@@ -596,6 +602,7 @@ internal sealed class TileCache : IDisposable
     private readonly Queue<(int Z, int X, int Y)> _order = new();
     private readonly HashSet<(int Z, int X, int Y)> _inFlight = new();
     private readonly CragMapCanvas _owner;
+    private bool _diskPruned;
 
     public TileCache(CragMapCanvas owner) => _owner = owner;
 
@@ -606,6 +613,9 @@ internal sealed class TileCache : IDisposable
             return _cache.TryGetValue((z, x, y), out Image? tile) ? tile : null;
         }
     }
+
+    private static string DiskPath(int z, int x, int y)
+        => Path.Combine(DiskDir, z.ToString(), x.ToString(), y + ".png");
 
     public void RequestAsync(int z, int x, int y)
     {
@@ -618,10 +628,23 @@ internal sealed class TileCache : IDisposable
         {
             try
             {
-                using HttpResponseMessage response = await _http
-                    .GetAsync(string.Format(UrlTemplate, z, x, y)).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode) return;
-                byte[] bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                string diskPath = DiskPath(z, x, y);
+                byte[]? bytes = null;
+                try
+                {
+                    if (File.Exists(diskPath)) bytes = await File.ReadAllBytesAsync(diskPath).ConfigureAwait(false);
+                }
+                catch { /* unreadable cache entry — fall through to network */ }
+
+                bool fromDisk = bytes is not null;
+                if (bytes is null)
+                {
+                    using HttpResponseMessage response = await _http
+                        .GetAsync(string.Format(UrlTemplate, z, x, y)).ConfigureAwait(false);
+                    if (!response.IsSuccessStatusCode) return;
+                    bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                }
+
                 using var ms = new MemoryStream(bytes);
                 using Image raw = Image.FromStream(ms);
                 var tile = CragMapCanvas.DarkenTile(raw);
@@ -637,6 +660,8 @@ internal sealed class TileCache : IDisposable
                     _order.Enqueue(key);
                 }
                 if (_owner.IsHandleCreated) _owner.BeginInvoke(() => _owner.Invalidate());
+
+                if (!fromDisk) PersistAsync(diskPath, bytes);
             }
             catch
             {
@@ -647,6 +672,37 @@ internal sealed class TileCache : IDisposable
                 lock (_cache) { _inFlight.Remove(key); }
             }
         });
+    }
+
+    /// <summary>Best-effort write of the raw tile PNG + occasional size-cap pruning.</summary>
+    private void PersistAsync(string diskPath, byte[] bytes) => _ = Task.Run(() =>
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(diskPath)!);
+            File.WriteAllBytes(diskPath, bytes);
+            if (!_diskPruned)
+            {
+                _diskPruned = true; // once per session is plenty
+                PruneDisk();
+            }
+        }
+        catch { /* disk cache is best-effort */ }
+    });
+
+    private static void PruneDisk()
+    {
+        if (!Directory.Exists(DiskDir)) return;
+        var files = Directory.EnumerateFiles(DiskDir, "*.png", SearchOption.AllDirectories)
+            .Select(f => new FileInfo(f))
+            .OrderBy(f => f.LastWriteTimeUtc)
+            .ToList();
+        long total = files.Sum(f => f.Length);
+        foreach (FileInfo f in files)
+        {
+            if (total <= DiskCapBytes * 3 / 5) break;
+            try { long len = f.Length; f.Delete(); total -= len; } catch { /* locked file — skip */ }
+        }
     }
 
     public void Dispose() => _http.Dispose();
