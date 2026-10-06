@@ -260,6 +260,13 @@ internal sealed class CragMapCanvas : Control
         base.OnMouseUp(e);
     }
 
+    protected override void OnDoubleClick(EventArgs e)
+    {
+        // Convention: double-click zooms in around the cursor.
+        if (e is MouseEventArgs me && !InZoomArea(me.Location)) ZoomBy(1.5f, me.Location);
+        base.OnDoubleClick(e);
+    }
+
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         ZoomBy(e.Delta > 0 ? 1.25f : 1 / 1.25f, e.Location);

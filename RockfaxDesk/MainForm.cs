@@ -202,6 +202,58 @@ public sealed class MainForm : Form
         _lblStatus.Text = "ready — Ctrl+F to search";
     }
 
+    // ---- window state persistence ---------------------------------------------
+
+    private static string StatePath
+    {
+        get
+        {
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RockfaxDesk");
+            Directory.CreateDirectory(dir);
+            return Path.Combine(dir, "window.json");
+        }
+    }
+
+    private sealed record SavedWindowState(int X, int Y, int W, int H, int Splitter, bool Maximized);
+
+    private void SaveWindowState()
+    {
+        try
+        {
+            Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            if (bounds.Width < MinimumSize.Width) return;
+            var s = new SavedWindowState(bounds.X, bounds.Y, bounds.Width, bounds.Height,
+                                    _contentSplit.SplitterDistance, WindowState == FormWindowState.Maximized);
+            File.WriteAllText(StatePath, System.Text.Json.JsonSerializer.Serialize(s));
+        }
+        catch { /* best effort */ }
+    }
+
+    private int _restoreSplitter = 390;
+
+    private void RestoreWindowState()
+    {
+        try
+        {
+            if (!File.Exists(StatePath)) return;
+            var s = System.Text.Json.JsonSerializer.Deserialize<SavedWindowState>(File.ReadAllText(StatePath));
+            if (s is null) return;
+            if (s.W < MinimumSize.Width || s.H < MinimumSize.Height) return;
+            StartPosition = FormStartPosition.Manual;
+            Location = new Point(Math.Max(s.X, -4), Math.Max(s.Y, -4));
+            Size = new Size(s.W, s.H);
+            _restoreSplitter = s.Splitter;
+            if (s.Maximized) WindowState = FormWindowState.Maximized;
+        }
+        catch { /* best effort */ }
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        SaveWindowState();
+        base.OnFormClosing(e);
+    }
+
     // ---- layout builders -----------------------------------------------------
 
     private Panel BuildHeaderBar()

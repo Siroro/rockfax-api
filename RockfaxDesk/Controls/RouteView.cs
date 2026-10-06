@@ -25,11 +25,7 @@ internal sealed class RouteView : UserControl
         BorderStyle = BorderStyle.None, BackColor = Ui.Panel, ForeColor = Ui.Text,
         Font = Ui.Body,
     };
-    private readonly FlowLayoutPanel _photos = new()
-    {
-        Dock = DockStyle.Bottom, Height = 146, AutoScroll = true, BackColor = Ui.BgDeep,
-        Padding = new Padding(8), WrapContents = true,
-    };
+    private readonly FlowLayoutPanel _photos = NewPhotoStrip();
     private readonly Label _lblPhotoNote = Ui.Label("", Ui.Muted, Ui.Tiny);
     private readonly Label _lblStatus = Ui.Label("", Ui.Amber, Ui.Small);
 
@@ -37,6 +33,27 @@ internal sealed class RouteView : UserControl
     private ImageFetcher? _images;
 
     public event Action<int, string>? CragRequested;
+
+    /// <summary>Single-row gallery: wheel scrolls sideways, like a filmstrip.</summary>
+    internal static FlowLayoutPanel NewPhotoStrip()
+    {
+        var strip = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom, Height = 146, AutoScroll = true, BackColor = Ui.BgDeep,
+            Padding = new Padding(8), WrapContents = false,
+        };
+        strip.MouseWheel += (_, e) =>
+        {
+            if (!strip.HorizontalScroll.Visible) return;
+            int delta = e.Delta > 0 ? -120 : 120;
+            int target = Math.Clamp(strip.HorizontalScroll.Value + delta,
+                strip.HorizontalScroll.Minimum, strip.HorizontalScroll.Maximum);
+            strip.HorizontalScroll.Value = target;
+            strip.PerformLayout();
+            ((HandledMouseEventArgs)e).Handled = true;
+        };
+        return strip;
+    }
 
     public RouteView()
     {

@@ -24,11 +24,7 @@ internal sealed class CragView : UserControl
         Dock = DockStyle.Top, Height = 84, BackColor = Ui.Bg, Padding = new Padding(12, 4, 0, 0), WrapContents = false,
     };
     private readonly UiList _lvRoutes = new();
-    private readonly FlowLayoutPanel _photos = new()
-    {
-        Dock = DockStyle.Bottom, Height = 146, AutoScroll = true, BackColor = Ui.BgDeep,
-        Padding = new Padding(8), WrapContents = true,
-    };
+    private readonly FlowLayoutPanel _photos = RouteView.NewPhotoStrip();
     private readonly Label _lblStatus = Ui.Label("", Ui.Amber, Ui.Small);
 
     private RockfaxClient? _api;
