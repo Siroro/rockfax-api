@@ -21,6 +21,7 @@ public sealed class MainForm : Form
     private readonly Label _lblUser = Ui.Label("not signed in", Ui.Muted, Ui.Small);
     private readonly Button _btnLogin;
     private readonly Button _btnLogbook;
+    private Button _btnHelp = new();
 
     // ---- toolbar ------------------------------------------------------------
     private readonly TextBox _txtSearch = new();
@@ -167,6 +168,24 @@ public sealed class MainForm : Form
         {
             if (e.Control && e.KeyCode == Keys.F) { _txtSearch.Focus(); e.Handled = true; }
             if (e.KeyCode == Keys.F5) { await ReloadCurrentAsync(); e.Handled = true; }
+            if (e.KeyCode == Keys.F1) { _btnHelp.PerformClick(); e.Handled = true; }
+        };
+        _lblStatus.Click += (_, _) =>
+        {
+            try
+            {
+                Clipboard.SetText(_lblStatus.Text);
+                string was = _lblStatus.Text;
+                _lblStatus.Text = "copied to clipboard";
+                CopyReset();
+                void CopyReset()
+                {
+                    var t = new System.Windows.Forms.Timer { Interval = 1400 };
+                    t.Tick += (_, _) => { t.Stop(); t.Dispose(); _lblStatus.Text = was; };
+                    t.Start();
+                }
+            }
+            catch { /* clipboard can be locked \u2014 ignore */ }
         };
     }
 
@@ -293,8 +312,8 @@ public sealed class MainForm : Form
         var subtitle = Ui.Label("unofficial UKClimbing client", Ui.Muted, Ui.Tiny);
         subtitle.Location = new Point(244, 22);
 
-        var help = Ui.Button("?", 30);
-        help.Click += (_, _) =>
+        _btnHelp = Ui.Button("?", 30);
+        _btnHelp.Click += (_, _) =>
             MessageBox.Show(
                 "Rockfax Explorer \u2014 unofficial UKClimbing client\n\n" +
                 "Reverse engineered from the Rockfax Android app for personal interoperability.\n" +
@@ -318,7 +337,7 @@ public sealed class MainForm : Form
             Padding = new Padding(0, 12, 0, 0),
             WrapContents = false,
         };
-        auth.Controls.Add(help);
+        auth.Controls.Add(_btnHelp);
         auth.Controls.Add(_btnLogbook);
         auth.Controls.Add(_lblUser);
         auth.Controls.Add(_btnLogin);

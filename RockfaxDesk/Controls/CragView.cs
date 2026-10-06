@@ -25,6 +25,8 @@ internal sealed class CragView : UserControl
     };
     private readonly UiList _lvRoutes = new();
     private readonly List<(RouteSummary Summary, string Buttress, int Band)> _allRoutes = new();
+    private readonly List<int> _groupFirstItems = new();
+    private ComboBox? _buttressJump;
     private int _bandFilter = -1; // -1 = all
     private readonly FlowLayoutPanel _photos = RouteView.NewPhotoStrip();
     private readonly Label _lblStatus = Ui.Label("", Ui.Amber, Ui.Small);
@@ -66,11 +68,29 @@ internal sealed class CragView : UserControl
         var titleRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = Ui.Bg, Padding = new Padding(10, 2, 0, 0) };
         titleRow.Controls.Add(_lblTitle);
         titleRow.Controls.Add(_metaChips);
+        _buttressJump = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Ui.BgDeep,
+            ForeColor = Ui.Text,
+            Font = Ui.Small,
+            Width = 200,
+            Visible = false,
+        };
+        _buttressJump.SelectedIndexChanged += (_, _) =>
+        {
+            if (_buttressJump.SelectedIndex is int idx && idx > 0 && idx - 1 < _groupFirstItems.Count)
+            {
+                _lvRoutes.EnsureVisible(_groupFirstItems[idx - 1]);
+            }
+        };
         var routesHeader = Ui.SectionHeader("ROUTES — double-click for details", 26);
         var weatherHeader = Ui.SectionHeader("WEATHER", 24);
 
         _content.Controls.Add(_lvRoutes);
         _content.Controls.Add(_photos);
+        _content.Controls.Add(_buttressJump);
         _content.Controls.Add(routesHeader);
         _content.Controls.Add(weatherHeader);
         _content.Controls.Add(_weather);
