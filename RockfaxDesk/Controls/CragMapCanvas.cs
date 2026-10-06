@@ -90,7 +90,7 @@ internal sealed class CragMapCanvas : Control
         _zoom = 1f;
         _pan = new PointF(70f, 26f);
         _hover = null;
-        _selected = null;
+        // keep _selected: repaints (free-crags overlay) must not lose the ring
         Invalidate();
     }
 
