@@ -531,7 +531,7 @@ public sealed class MainForm : Form
                 {
                     var item = new ListViewItem(p.Title);
                     item.SubItems.Add(p.NRoutes.ToString());
-                    item.SubItems.Add($"{p.Lat:0.00}, {p.Lng:0.00}");
+                    item.SubItems.Add(p.Free ? "free sample" : $"{p.Lat:0.00}, {p.Lng:0.00}");
                     item.Tag = p;
                     return (item, p.Title);
                 }), "all crags — busiest first", $"{points.Count:N0} crags — double-click to open · see the CRAG MAP tab");

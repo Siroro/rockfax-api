@@ -189,19 +189,28 @@ screenshot-tested UI (`shot.ps1` + `--goto/--search/--crag/--top10/--freecrags` 
 drive it headlessly for captures):
 
 - **Route pages** — grade/star chips, description, first ascent, height/pitches,
-  the live community comments thread, and a photo strip (click for full size;
-  thumbnails fall back to full images when the CDN lacks a t_300h variant).
-- **Crag pages** — grade-distribution chips (Mod–VD / S–HS / VS–HVS / E1+), a
-  seven-day weather card strip, the route list grouped by buttress, and crag photos.
+  the live community comments thread, and a filmstrip photo gallery (click for a
+  full-size lightbox; `←`/`→` or the wheel steps through the strip; thumbnails
+  fall back to full images when the CDN lacks a t_300h variant). "on UKC" opens the
+  crag on ukclimbing.com.
+- **Crag pages** — clickable grade-band chips (Mod-VD / S-HS / VS-HVS / E1+) that
+  filter the buttress-grouped route list, a seven-day weather card strip, crag
+  photos, and an "on UKC" link.
 - **Crag map** — every UKC crag as a pannable, zoomable dot plot with a degree
-  graticule, glow-by-popularity, hover labels, on-canvas zoom controls, and
-  free-sample crags in amber. The viewport is pinned to Britain + Ireland because
-  the marker feed contains overseas crags and bad rows.
+  graticule, glow-by-popularity, hover labels, on-canvas zoom controls, double-click
+  zoom, and free-sample crags in amber. Opening a crag anywhere rings its dot here.
+  The viewport is pinned to Britain + Ireland because the marker feed contains
+  overseas crags and bad rows.
 - **Search & lists** — route search (Enter), crag filter, busiest-crags, free crags.
 - **Logbook** — sign in with your UKClimbing account for your ascents (UKC style
-  names decoded) and wishlist; double-click an ascent to open the route.
-- **Top 10** — the weekly photo grid with rank badges and ratings.
-- Keyboard: **Ctrl+F** focuses search, **Enter** searches/opens, **Esc** clears.
+  names decoded) with a live filter box, and your wishlist; double-click an ascent
+  to open the route.
+- **Top 10** — the weekly photo grid with rank badges and ratings, refreshable.
+- **Shell** — hover-highlighted lists, a loading spinner in the status bar, buttons
+  lock while a request is in flight, failures render in red, window/splitter
+  geometry persists across runs, and a "?" About box lists attribution + shortcuts.
+- Keyboard: **Ctrl+F** focuses search, **Enter** searches/opens, **Esc** clears,
+  **F5** refreshes the current route/crag/list.
 
 ```bash
 dotnet run --project RockfaxDesk            # GUI

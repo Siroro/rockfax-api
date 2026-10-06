@@ -263,6 +263,11 @@ internal sealed class CragView : UserControl
         }
         _lvRoutes.ShowGroups = true;
         _lvRoutes.EndUpdate();
+        if (_bandFilter >= 0 && _allRoutes.Count > 0)
+        {
+            string[] labels = { "Mod-VD", "S-HS", "VS-HVS", "E1+" };
+            _lblStatus.Text = $"{_lvRoutes.Items.Count} of {_allRoutes.Count} routes ({labels[_bandFilter]} band) — double-click for details";
+        }
     }
 
     internal static List<WeatherChip> FormatWeather(JsonDocument doc)
