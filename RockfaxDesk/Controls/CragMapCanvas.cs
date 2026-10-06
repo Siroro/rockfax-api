@@ -59,6 +59,15 @@ internal sealed class CragMapCanvas : Control
 
     public string Subtitle => _points.Count == 0 ? "" : $"{_points.Count:N0} crags · zoom ×{_zoom:0.0}";
 
+    /// <summary>Centers the view on a coordinate at a given zoom (crag page "map" button).</summary>
+    public void CenterOn(float lat, float lng, float zoom)
+    {
+        _zoom = Math.Clamp(zoom, 0.4f, 220f);
+        (float x, float y) = Project(new CragPoint { Lat = lat, Lng = lng });
+        _pan = new PointF(_pan.X + (Width / 2f - x), _pan.Y + (Height / 2f - y));
+        Invalidate();
+    }
+
     /// <summary>Rings the dot for a crag opened elsewhere (list, route page).</summary>
     public void SelectCrag(int ukcId)
     {
@@ -110,6 +119,7 @@ internal sealed class CragMapCanvas : Control
         DrawGraticule(g);
         DrawDots(g, e.ClipRectangle);
         DrawHoverAndSelection(g);
+        DrawScaleBar(g);
         DrawLegend(g);
         DrawZoomControls(g);
     }
@@ -180,6 +190,25 @@ internal sealed class CragMapCanvas : Control
         using (var back = new SolidBrush(Color.FromArgb(170, 8, 13, 25)))
             g.FillRectangle(back, box);
         TextRenderer.DrawText(g, legend, Ui.Small, new Point(box.X + 8, box.Y + 3), Ui.Muted);
+    }
+
+    /// <summary>Draws a km scale bar, bottom-right above the zoom controls.</summary>
+    private void DrawScaleBar(Graphics g)
+    {
+        double kmPerPx = 1.0 / (Fit * _zoom);
+        double maxKm = 100 * kmPerPx;
+        double nice = maxKm switch
+        {
+            >= 500 => 500, >= 250 => 250, >= 100 => 100, >= 50 => 50, >= 25 => 25,
+            >= 10 => 10, >= 5 => 5, >= 2 => 2, _ => 1,
+        };
+        int px = (int)(nice / kmPerPx);
+        int x = Width - px - 24, y = Height - 34;
+        using var pen = new Pen(Color.FromArgb(200, 133, 152, 180), 2f);
+        g.DrawLine(pen, x, y, x + px, y);
+        g.DrawLine(pen, x, y - 4, x, y + 4);
+        g.DrawLine(pen, x + px, y - 4, x + px, y + 4);
+        TextRenderer.DrawText(g, $"{nice:0} km", Ui.Small, new Point(x + px / 2 - 24, y - 22), Ui.Muted);
     }
 
     private Rectangle ZoomInRect => new(Width - 112, 12, 32, 28);

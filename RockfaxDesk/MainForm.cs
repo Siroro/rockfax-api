@@ -113,6 +113,15 @@ public sealed class MainForm : Form
         _top10View.Bind(_api, _images);
         _routeView.CragRequested += (id, name) => _ = OpenCragAsync(id, name);
         _cragView.RouteRequested += r => _ = OpenRouteAsync(r);
+        _cragView.MapRequested += id =>
+        {
+            CragPoint? p = _cragPoints.FirstOrDefault(x => x.UkcId == id || x.RockfaxId == id);
+            if (p is null) { _lblStatus.Text = "crag location unknown"; return; }
+            _tabs.Select(2);
+            _map.CenterOn(p.Lat, p.Lng, 4f);
+            _map.SelectCrag(id);
+            _lblStatus.Text = $"map centred on {p.Title}";
+        };
         _logbookView.RouteRequested += r => _ = OpenRouteAsync(r);
         _map.CragSelected += p => _ = OpenCragAsync(p.UkcId, p.Title);
 

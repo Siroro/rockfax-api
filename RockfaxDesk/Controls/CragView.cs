@@ -33,6 +33,7 @@ internal sealed class CragView : UserControl
     private ImageFetcher? _images;
 
     public event Action<RouteSummary>? RouteRequested;
+    public event Action<int>? MapRequested;
 
     public CragView()
     {
