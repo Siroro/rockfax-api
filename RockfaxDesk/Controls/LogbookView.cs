@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Globalization;
 using System.Text.Json;
 using RockfaxApi;
 
@@ -15,6 +16,11 @@ internal sealed class LogbookView : UserControl
     private readonly TextBox _filter = new();
     private readonly Panel _filterBox;
     private readonly Label _empty;
+    private readonly FlowLayoutPanel _stats = new()
+    {
+        Dock = DockStyle.Top, Height = 34, BackColor = Ui.Bg,
+        Padding = new Padding(8, 3, 0, 0), WrapContents = false,
+    };
 
     public event Action<RouteSummary>? RouteRequested;
 
@@ -122,6 +128,8 @@ internal sealed class LogbookView : UserControl
         _lblStatus.Padding = new Padding(10, 2, 0, 0);
         _split.Panel1.Controls.Add(_lvAscents);
         _split.Panel1.Controls.Add(_lblStatus);
+        _split.Panel1.Controls.Add(_stats); // docks first (reverse z-order): strip above the list
+        _stats.Visible = false;
         _split.Panel2.Controls.Add(_lvWishlist);
         _split.Panel2.Controls.Add(_lblWishlist);
         _split.SplitterDistance = 420;
@@ -171,6 +179,61 @@ internal sealed class LogbookView : UserControl
 
     /// <summary>One RFC-4180 field: always quoted, embedded quotes doubled.</summary>
     internal static string CsvField(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+
+    /// <summary>Summary chips above the ascent list: totals, this year, distinct crags, hardest.</summary>
+    private void UpdateStats()
+    {
+        var parsed = new List<(DateTime Date, string Grade, string Crag)>();
+        foreach ((ListViewItem item, _) in _allAscents)
+        {
+            _ = DateTime.TryParse(item.SubItems[0].Text, CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out DateTime date);
+            parsed.Add((date,
+                item.SubItems.Count > 2 ? item.SubItems[2].Text : "",
+                item.SubItems.Count > 3 ? item.SubItems[3].Text : ""));
+        }
+        (int total, int thisYear, int crags, string top) = Stats(parsed);
+        _stats.Controls.Clear();
+        if (total == 0) { _stats.Visible = false; return; }
+        _stats.Controls.Add(Ui.Chip($"{total} ascents", Ui.Text, Ui.Card));
+        _stats.Controls.Add(Ui.Chip($"{thisYear} this year", Ui.Green, Ui.Card));
+        _stats.Controls.Add(Ui.Chip($"{crags} crags", Ui.Accent, Ui.Card));
+        if (top.Length > 0) _stats.Controls.Add(Ui.Chip($"hardest: {top}", Ui.Amber, Ui.Card));
+        _stats.Visible = true;
+    }
+
+    /// <summary>UKC-ish grade ordering for the "hardest" chip: trad adjectives rank
+    /// M…HVS 0–6, E1+ ranks 7+, sport grades (7a, f6A) rank 20+. Unknown = -1.</summary>
+    internal static int GradeRank(string grade)
+    {
+        grade = grade.Trim().ToUpperInvariant();
+        string[] trad = { "M", "D", "VD", "S", "HS", "VS", "HVS" };
+        for (int i = 0; i < trad.Length; i++)
+            if (grade == trad[i] || grade.StartsWith(trad[i] + ' ')) return i;
+        if (grade.StartsWith("E")
+            && int.TryParse(new string(grade.Skip(1).TakeWhile(char.IsDigit).ToArray()), out int e)
+            && e is >= 1 and <= 12) return 7 + e;
+        string digits = new(grade.SkipWhile(c => !char.IsDigit(c)).TakeWhile(char.IsDigit).ToArray());
+        if (digits.Length > 0 && int.TryParse(digits, out int sport)) return 20 + sport;
+        return -1;
+    }
+
+    internal static (int Total, int ThisYear, int Crags, string TopGrade) Stats(
+        IEnumerable<(DateTime Date, string Grade, string Crag)> ascents)
+    {
+        int total = 0, thisYear = 0, topRank = -1;
+        string topGrade = "";
+        var crags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach ((DateTime date, string grade, string crag) in ascents)
+        {
+            total++;
+            if (date.Year == DateTime.Today.Year) thisYear++;
+            if (crag.Length > 0) crags.Add(crag);
+            int rank = GradeRank(grade);
+            if (rank > topRank) { topRank = rank; topGrade = grade; }
+        }
+        return (total, thisYear, crags.Count, topGrade);
+    }
 
     public async Task LoadAsync(RockfaxClient api)
     {
@@ -246,6 +309,7 @@ internal sealed class LogbookView : UserControl
             ApplyFilter();
             _lblStatus.Text = $"{total} ascents" + (deleted > 0 ? $"  ·  {deleted} deleted entries skipped" : "") + "  ·  double-click to open the route";
             _lvAscents.StretchLastColumn();
+            UpdateStats();
         }
         catch (Exception ex)
         {

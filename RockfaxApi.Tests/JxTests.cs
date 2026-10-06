@@ -127,3 +127,48 @@ public class CsvFieldTests
     public void Fields_are_always_quoted_with_doubled_quotes(string value, string expected)
         => Assert.Equal(expected, LogbookView.CsvField(value));
 }
+
+public class LogbookStatsTests
+{
+    [Theory]
+    [InlineData("M", 0)]
+    [InlineData("D", 1)]
+    [InlineData("VD", 2)]
+    [InlineData("S", 3)]
+    [InlineData("HS", 4)]
+    [InlineData("VS 4c", 5)]
+    [InlineData("HVS", 6)]
+    [InlineData("E1", 8)]
+    [InlineData("E2 5b", 9)]
+    [InlineData("7a", 27)]
+    [InlineData("f6A", 26)]
+    [InlineData("", -1)]
+    [InlineData("unknown", -1)]
+    public void Grades_rank_in_climbing_order(string grade, int expected)
+        => Assert.Equal(expected, LogbookView.GradeRank(grade));
+
+    [Fact]
+    public void Stats_aggregate_totals_year_crags_and_hardest()
+    {
+        var ascents = new[]
+        {
+            (new DateTime(2024, 5, 1), "VS 4c", "Stanage"),
+            (new DateTime(2026, 3, 2), "HVS 5a", "Stanage"),
+            (new DateTime(2026, 9, 9), "E1 5b", "Curbar"),
+            (new DateTime(2026, 9, 10), "7a", "Malham"),
+            (new DateTime(2026, 9, 11), "", ""),
+        };
+        (int total, int thisYear, int crags, string top) = LogbookView.Stats(ascents);
+        Assert.Equal(5, total);
+        Assert.Equal(4, thisYear);
+        Assert.Equal(3, crags);
+        Assert.Equal("7a", top); // sport 27 outranks E1's 8
+    }
+
+    [Fact]
+    public void Stats_on_an_empty_logbook_is_all_zeros()
+    {
+        (int total, int thisYear, int crags, string top) = LogbookView.Stats(Array.Empty<(DateTime, string, string)>());
+        Assert.Equal((0, 0, 0, ""), (total, thisYear, crags, top));
+    }
+}

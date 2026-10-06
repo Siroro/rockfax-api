@@ -65,6 +65,23 @@ internal sealed class CragView : UserControl
             if (_lvRoutes.SelectedItems.Count > 0 && _lvRoutes.SelectedItems[0].Tag is RouteSummary r)
                 RouteRequested?.Invoke(r);
         };
+        _lvRoutes.MouseUp += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right) return;
+            ListViewItem? hit = _lvRoutes.HitTest(e.Location).Item;
+            if (hit?.Tag is not RouteSummary route) return;
+            hit.Selected = true;
+            string url = $"https://www.ukclimbing.com/logbook/route.php?id={route.UkcId}";
+            Ui.Menu(
+                ("Open route", () => RouteRequested?.Invoke(route)),
+                ("Open on UKC ↗", () => Jx.OpenBrowser(url)),
+                ("Copy UKC link", () =>
+                {
+                    try { Clipboard.SetText(url); _lblStatus.Text = "link copied to the clipboard"; }
+                    catch { _lblStatus.Text = "clipboard is busy — try again"; }
+                })
+            ).Show(_lvRoutes, e.Location);
+        };
 
         var titleRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = Ui.Bg, Padding = new Padding(10, 2, 0, 0) };
         titleRow.Controls.Add(_lblTitle);

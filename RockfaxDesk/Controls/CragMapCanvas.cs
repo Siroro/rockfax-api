@@ -67,7 +67,8 @@ internal sealed class CragMapCanvas : Control
     public CragMapCanvas()
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
-                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
+                 ControlStyles.Selectable, true);
         DoubleBuffered = true;
         BackColor = Ui.BgDeep;
         Cursor = Cursors.Hand;
@@ -390,7 +391,7 @@ internal sealed class CragMapCanvas : Control
 
     private void DrawLegend(Graphics g)
     {
-        const string legend = "● amber = free sample    ● large = 100+ routes    drag = pan    wheel / double-click = zoom    click a dot = open crag";
+        const string legend = "● amber = free sample    ● large = 100+ routes    drag / arrows = pan    wheel / double-click = zoom    click a dot = open crag";
         SizeF size = TextRenderer.MeasureText(legend, Ui.Small);
         var box = new Rectangle(10, Height - (int)size.Height - 30, (int)size.Width + 16, (int)size.Height + 8);
         using (var back = new SolidBrush(Color.FromArgb(170, 8, 13, 25)))
@@ -456,6 +457,7 @@ internal sealed class CragMapCanvas : Control
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
+        Focus(); // so arrow/zoom keys land on the map after a click
         if (e.Button == MouseButtons.Left && !InZoomArea(e.Location))
         {
             _dragging = true;
@@ -507,6 +509,28 @@ internal sealed class CragMapCanvas : Control
             }
         }
         base.OnMouseUp(e);
+    }
+
+    /// <summary>Keyboard map navigation once the canvas has focus (click it first).</summary>
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        const int step = 60;
+        var center = new Point(Width / 2, Height / 2);
+        switch (e.KeyCode)
+        {
+            case Keys.Left: _pan.X += step; break;  // view west: content shifts right
+            case Keys.Right: _pan.X -= step; break;
+            case Keys.Up: _pan.Y += step; break;    // view north: content shifts down
+            case Keys.Down: _pan.Y -= step; break;
+            case Keys.Oemplus:
+            case Keys.Add: ZoomBy(1.25, center); break;
+            case Keys.OemMinus:
+            case Keys.Subtract: ZoomBy(1 / 1.25, center); break;
+            case Keys.Home: ResetView(); break;
+            default: base.OnKeyDown(e); return;
+        }
+        if (e.KeyCode is Keys.Left or Keys.Right or Keys.Up or Keys.Down) Invalidate();
+        e.Handled = true;
     }
 
     protected override void OnMouseLeave(EventArgs e)

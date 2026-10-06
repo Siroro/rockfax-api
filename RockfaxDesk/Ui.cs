@@ -137,6 +137,45 @@ internal static class Ui
             Padding = new Padding(8, 4, 0, 0),
             Margin = Padding.Empty,
         };
+
+    /// <summary>Dark right-click menu. Items are (label, action) pairs; pass one per line.</summary>
+    public static ContextMenuStrip Menu(params (string Label, Action Click)[] items)
+    {
+        var menu = new ContextMenuStrip
+        {
+            BackColor = Panel,
+            ForeColor = Text,
+            ShowImageMargin = false,
+            ShowCheckMargin = false,
+            Font = Body,
+            Renderer = new ToolStripProfessionalRenderer(new DarkMenuColors()) { RoundedEdges = false },
+        };
+        foreach ((string label, Action click) in items)
+        {
+            var item = new ToolStripMenuItem(label) { ForeColor = Text };
+            item.Click += (_, _) => click();
+            menu.Items.Add(item);
+        }
+        return menu;
+    }
+}
+
+/// <summary>Palette for Ui.Menu so right-click menus match the app instead of system light.</summary>
+internal sealed class DarkMenuColors : ProfessionalColorTable
+{
+    public override Color ToolStripDropDownBackground => Ui.Panel;
+    public override Color ImageMarginGradientBegin => Ui.Panel;
+    public override Color ImageMarginGradientMiddle => Ui.Panel;
+    public override Color ImageMarginGradientEnd => Ui.Panel;
+    public override Color MenuBorder => Ui.Border;
+    public override Color MenuItemBorder => Ui.Border;
+    public override Color MenuItemSelected => Ui.Card;
+    public override Color MenuItemSelectedGradientBegin => Ui.Card;
+    public override Color MenuItemSelectedGradientEnd => Ui.Card;
+    public override Color MenuItemPressedGradientBegin => Ui.Panel;
+    public override Color MenuItemPressedGradientEnd => Ui.Panel;
+    public override Color SeparatorDark => Ui.Border;
+    public override Color SeparatorLight => Ui.Border;
 }
 
 /// <summary>

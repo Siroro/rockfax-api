@@ -22,6 +22,8 @@ public sealed class MainForm : Form
     private readonly Button _btnLogin;
     private readonly Button _btnLogbook;
     private Button _btnHelp = new();
+    private readonly ToolTip _tips = new();
+    private const string BaseTitle = "Rockfax Explorer — unofficial UKClimbing client";
 
     // ---- toolbar ------------------------------------------------------------
     private readonly TextBox _txtSearch = new();
@@ -93,7 +95,7 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "Rockfax Explorer — unofficial UKClimbing client";
+        Text = BaseTitle;
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(1160, 720);
         Size = new Size(1360, 820);
@@ -111,6 +113,14 @@ public sealed class MainForm : Form
         _btnFreeCrags = Ui.Button("Free crags", 92);
         _btnTop10 = Ui.Button("Top 10", 78);
 
+        _tips.SetToolTip(_btnSearch, "search UKC routes by name (Ctrl+F)");
+        _tips.SetToolTip(_btnAllCrags, "every crag with a marker, busiest first");
+        _tips.SetToolTip(_btnFreeCrags, "Rockfax free-sample crags (amber on the map)");
+        _tips.SetToolTip(_btnTop10, "the week's top-ten photos");
+        _tips.SetToolTip(_btnLogin, "sign in with your own UKClimbing account");
+        _tips.SetToolTip(_btnLogbook, "your ascents + wishlist (Ctrl+4)");
+        _tips.SetToolTip(_btnHelp, "about & shortcuts (F1)");
+
         BuildLeftRail();
         BuildTabs();
 
@@ -123,10 +133,7 @@ public sealed class MainForm : Form
         {
             CragPoint? p = _cragPoints.FirstOrDefault(x => x.UkcId == id || x.RockfaxId == id);
             if (p is null) { _lblStatus.Text = "crag location unknown"; return; }
-            _tabs.Select(2);
-            _map.CenterOn(p.Lat, p.Lng, 11f);
-            _map.SelectCrag(id);
-            _lblStatus.Text = $"map centred on {p.Title}";
+            ShowCragOnMap(p);
         };
         _logbookView.RouteRequested += r => _ = OpenRouteAsync(r);
         _map.CragSelected += p => _ = OpenCragAsync(p.UkcId, p.Title);
@@ -166,6 +173,34 @@ public sealed class MainForm : Form
         _btnTop10.Click += async (_, _) => { _tabs.Select(4); await _top10View.LoadAsync(); };
         _lvLeft.DoubleClick += (_, _) => _ = LeftItemActivated();
         _lvLeft.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) { await LeftItemActivated(); } };
+        _lvLeft.MouseUp += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right) return;
+            ListViewItem? hit = _lvLeft.HitTest(e.Location).Item;
+            if (hit is null) return;
+            _lvLeft.SelectedIndices.Clear();
+            hit.Selected = true;
+            switch (hit.Tag)
+            {
+                case RouteSummary route:
+                    string routeUrl = $"https://www.ukclimbing.com/logbook/route.php?id={route.UkcId}";
+                    Ui.Menu(
+                        ("Open route", () => _ = OpenRouteAsync(route)),
+                        ("Open on UKC ↗", () => Jx.OpenBrowser(routeUrl)),
+                        ("Copy UKC link", () => CopyText(routeUrl))
+                    ).Show(_lvLeft, e.Location);
+                    break;
+                case CragPoint crag:
+                    string cragUrl = $"https://www.ukclimbing.com/logbook/crag.php?id={crag.UkcId}";
+                    Ui.Menu(
+                        ("Open crag page", () => _ = OpenCragAsync(crag.UkcId, crag.Title)),
+                        ("Show on map", () => ShowCragOnMap(crag)),
+                        ("Open on UKC ↗", () => Jx.OpenBrowser(cragUrl)),
+                        ("Copy UKC link", () => CopyText(cragUrl))
+                    ).Show(_lvLeft, e.Location);
+                    break;
+            }
+        };
         _txtSearch.TextChanged += (_, _) =>
         {
             _searchDebounce.Stop();
@@ -184,6 +219,11 @@ public sealed class MainForm : Form
         KeyDown += async (_, e) =>
         {
             if (e.Control && e.KeyCode == Keys.F) { _txtSearch.Focus(); e.Handled = true; }
+            if (e.Control && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D5)
+            {
+                _tabs.Select(e.KeyCode - Keys.D1);
+                e.Handled = true;
+            }
             if (e.KeyCode == Keys.F5) { await ReloadCurrentAsync(); e.Handled = true; }
             if (e.KeyCode == Keys.F1) { _btnHelp.PerformClick(); e.Handled = true; }
         };
@@ -283,7 +323,8 @@ public sealed class MainForm : Form
     }
 
     private sealed record SavedWindowState(int X, int Y, int W, int H, int Splitter, bool Maximized,
-                                           float MapZoom, float MapCenterLat, float MapCenterLng);
+                                           float MapZoom, float MapCenterLat, float MapCenterLng,
+                                           string LastSearch = "");
 
     private void SaveWindowState()
     {
@@ -295,7 +336,7 @@ public sealed class MainForm : Form
             (float mz, float mlat, float mlng) = _map.GetView();
             var s = new SavedWindowState(bounds.X, bounds.Y, bounds.Width, bounds.Height,
                                     _contentSplit.SplitterDistance, WindowState == FormWindowState.Maximized,
-                                    mz, mlat, mlng);
+                                    mz, mlat, mlng, _txtSearch.Text);
             File.WriteAllText(StatePath, System.Text.Json.JsonSerializer.Serialize(s));
         }
         catch { /* best effort */ }
@@ -317,6 +358,7 @@ public sealed class MainForm : Form
             Size = new Size(s.W, s.H);
             _restoreSplitter = s.Splitter;
             if (s.MapZoom > 0) _restoreMap = (s.MapZoom, s.MapCenterLat, s.MapCenterLng);
+            if (!string.IsNullOrEmpty(s.LastSearch)) _txtSearch.Text = s.LastSearch; // restored, not auto-run
             if (s.Maximized) WindowState = FormWindowState.Maximized;
         }
         catch { /* best effort */ }
@@ -352,12 +394,14 @@ public sealed class MainForm : Form
                 "Reverse engineered from the Rockfax Android app for personal interoperability.\n" +
                 "Not affiliated with Rockfax or UKClimbing; use your own account and keep request volume sane.\n\n" +
                 "Shortcuts:\n" +
-                "  Ctrl+F  focus search\n" +
-                "  Enter   search / open selection\n" +
-                "  Esc     clear the search box\n" +
-                "  F5      refresh current route/crag/list\n" +
-                "  Map:    drag = pan \u00b7 wheel or +/- = zoom \u00b7 click a dot = open crag\n" +
-                "  Photos: \u2190/\u2192 or wheel = previous/next \u00b7 click = close",
+                "  Ctrl+F   focus search\n" +
+                "  Ctrl+1–5 switch tabs (route, crag, map, logbook, top 10)\n" +
+                "  Enter    search / open selection\n" +
+                "  Esc      clear the search box\n" +
+                "  F5       refresh current route/crag/list\n" +
+                "  Map:     drag = pan \u00b7 wheel or +/- = zoom \u00b7 arrows = pan \u00b7 click a dot = open crag\n" +
+                "  Lists:   right-click a row for open / UKC link actions\n" +
+                "  Photos:  \u2190/\u2192 or wheel = previous/next \u00b7 click = close",
                 "About Rockfax Explorer", MessageBoxButtons.OK, MessageBoxIcon.Information);
         // Auth cluster hugs the right edge. FlowDirection.RightToLeft places the first
         // child at the right edge and flows leftward, so add in reverse visual order.
@@ -555,6 +599,7 @@ public sealed class MainForm : Form
     {
         _lastRoute = route;
         _tabs.Select(0);
+        Text = $"{route.Name} — Rockfax Explorer";
         await _routeView.ShowRouteAsync(route);
         _lblStatus.Text = $"route: {route.Name}";
     }
@@ -563,6 +608,7 @@ public sealed class MainForm : Form
     {
         _lastCrag = (ukcCragId, name);
         _tabs.Select(1);
+        Text = name.Length > 0 ? $"{name} — Rockfax Explorer" : BaseTitle;
         _map.SelectCrag(ukcCragId); // ring the dot on the map too
         await _cragView.ShowCragAsync(ukcCragId, name);
         _lblStatus.Text = $"crag: {name}";
@@ -699,4 +745,18 @@ public sealed class MainForm : Form
                     break;
             }
         });
+
+    private void CopyText(string text)
+    {
+        try { Clipboard.SetText(text); _lblStatus.Text = "link copied to the clipboard (click status to copy it again)"; }
+        catch { _lblStatus.Text = "clipboard is busy — try again"; }
+    }
+
+    private void ShowCragOnMap(CragPoint crag)
+    {
+        _tabs.Select(2);
+        _map.CenterOn(crag.Lat, crag.Lng, 11f);
+        _map.SelectCrag(crag.UkcId);
+        _lblStatus.Text = $"map centred on {crag.Title}";
+    }
 }
