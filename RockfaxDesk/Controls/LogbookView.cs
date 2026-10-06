@@ -60,6 +60,10 @@ internal sealed class LogbookView : UserControl
         };
 
         var titleRow = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Ui.Bg, Padding = new Padding(10, 6, 10, 0) };
+        var export = Ui.Button("Export CSV", 100);
+        export.Dock = DockStyle.Right;
+        export.Click += async (_, _) => await ExportCsvAsync();
+        titleRow.Controls.Add(export);
         _filterBox = Ui.Box(_filter, 230, 30, cue: "filter ascents…");
         _filterBox.Dock = DockStyle.Left;
         _filterBox.Visible = false;
@@ -97,6 +101,33 @@ internal sealed class LogbookView : UserControl
         Controls.Add(_split);
         Controls.Add(titleRow);
         _split.Visible = false;
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (_allAscents.Count == 0) { _lblStatus.Text = "load your logbook first"; return; }
+        using var dialog = new SaveFileDialog
+        {
+            Filter = "CSV (*.csv)|*.csv",
+            FileName = $"ukc-logbook-{DateTime.Today:yyyy-MM-dd}.csv",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var lines = new List<string> { "date,route,grade,crag,style,notes" };
+            foreach (ListViewItem item in _lvAscents.Items)
+            {
+                string[] cols = item.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => s.Text).ToArray();
+string csv = string.Join(",", cols.Select(c => "" + c.Replace("", """") + ""));
+                lines.Add(csv);
+            }
+            await File.WriteAllLinesAsync(dialog.FileName, lines);
+            _lblStatus.Text = $"exported {_lvAscents.Items.Count} ascents to {Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception ex)
+        {
+            _lblStatus.Text = $"export failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     public async Task LoadAsync(RockfaxClient api)

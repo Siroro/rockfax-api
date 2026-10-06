@@ -224,7 +224,8 @@ public sealed class MainForm : Form
         }
     }
 
-    private sealed record SavedWindowState(int X, int Y, int W, int H, int Splitter, bool Maximized);
+    private sealed record SavedWindowState(int X, int Y, int W, int H, int Splitter, bool Maximized,
+                                           float MapZoom, float MapPanX, float MapPanY);
 
     private void SaveWindowState()
     {
@@ -232,14 +233,17 @@ public sealed class MainForm : Form
         {
             Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
             if (bounds.Width < MinimumSize.Width) return;
+            (float mz, float mx, float my) = _map.GetView();
             var s = new SavedWindowState(bounds.X, bounds.Y, bounds.Width, bounds.Height,
-                                    _contentSplit.SplitterDistance, WindowState == FormWindowState.Maximized);
+                                    _contentSplit.SplitterDistance, WindowState == FormWindowState.Maximized,
+                                    mz, mx, my);
             File.WriteAllText(StatePath, System.Text.Json.JsonSerializer.Serialize(s));
         }
         catch { /* best effort */ }
     }
 
     private int _restoreSplitter = 390;
+    private (float Zoom, float X, float Y)? _restoreMap;
 
     private void RestoreWindowState()
     {
@@ -253,6 +257,7 @@ public sealed class MainForm : Form
             Location = new Point(Math.Max(s.X, -4), Math.Max(s.Y, -4));
             Size = new Size(s.W, s.H);
             _restoreSplitter = s.Splitter;
+            if (s.MapZoom > 0) _restoreMap = (s.MapZoom, s.MapPanX, s.MapPanY);
             if (s.Maximized) WindowState = FormWindowState.Maximized;
         }
         catch { /* best effort */ }
@@ -529,6 +534,7 @@ public sealed class MainForm : Form
         }
         _cragPoints = points;
         _map.Points = points;
+        if (_restoreMap is { } view) { _map.ApplyView(view.Zoom, view.X, view.Y); _restoreMap = null; }
         return points;
     }
 

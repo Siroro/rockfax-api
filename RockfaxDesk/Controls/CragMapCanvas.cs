@@ -59,6 +59,16 @@ internal sealed class CragMapCanvas : Control
 
     public string Subtitle => _points.Count == 0 ? "" : $"{_points.Count:N0} crags · zoom ×{_zoom:0.0}";
 
+    /// <summary>Saves/restores the viewport across sessions (zoom + pan).</summary>
+    public (float Zoom, float PanX, float PanY) GetView() => (_zoom, _pan.X, _pan.Y);
+
+    public void ApplyView(float zoom, float panX, float panY)
+    {
+        _zoom = Math.Clamp(zoom, 0.4f, 220f);
+        _pan = new PointF(panX, panY);
+        Invalidate();
+    }
+
     /// <summary>Centers the view on a coordinate at a given zoom (crag page "map" button).</summary>
     public void CenterOn(float lat, float lng, float zoom)
     {
@@ -186,7 +196,7 @@ internal sealed class CragMapCanvas : Control
     {
         const string legend = "● amber = free sample    ● large = 100+ routes    drag = pan    wheel = zoom    click a dot = open crag";
         SizeF size = TextRenderer.MeasureText(legend, Ui.Small);
-        var box = new Rectangle(10, Height - (int)size.Height - 14, (int)size.Width + 16, (int)size.Height + 8);
+        var box = new Rectangle(10, Height - (int)size.Height - 30, (int)size.Width + 16, (int)size.Height + 8);
         using (var back = new SolidBrush(Color.FromArgb(170, 8, 13, 25)))
             g.FillRectangle(back, box);
         TextRenderer.DrawText(g, legend, Ui.Small, new Point(box.X + 8, box.Y + 3), Ui.Muted);
