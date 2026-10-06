@@ -1,4 +1,4 @@
-param([string]$out = "shot.png")
+param([string]$out = "shot.png", [int]$targetPid = 0)
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
 using System;
@@ -10,7 +10,7 @@ public class W {
 }
 "@
 $p = Get-Process RockfaxDesk -ErrorAction Stop |
-    Where-Object { $_.MainWindowHandle -ne 0 } |
+    Where-Object { $_.MainWindowHandle -ne 0 -and ($targetPid -eq 0 -or $_.Id -eq $targetPid) } |
     Select-Object -First 1
 if (-not $p) { throw "No RockfaxDesk process with a window found." }
 $h = $p.MainWindowHandle

@@ -98,6 +98,7 @@ public sealed class MainForm : Form
         ForeColor = Ui.Text;
         Font = Ui.Body;
         KeyPreview = true;
+        RestoreWindowState(); // persisted window/splitter/map view (must beat OnShown's async warm-up)
 
         _btnLogin = Ui.Button("Sign in", 84, primary: true);
         _btnLogbook = Ui.Button("My logbook", 100);
@@ -271,7 +272,7 @@ public sealed class MainForm : Form
     }
 
     private sealed record SavedWindowState(int X, int Y, int W, int H, int Splitter, bool Maximized,
-                                           float MapZoom, float MapPanX, float MapPanY);
+                                           float MapZoom, float MapCenterLat, float MapCenterLng);
 
     private void SaveWindowState()
     {
@@ -280,10 +281,10 @@ public sealed class MainForm : Form
             if (_contentSplit is null) return;
             Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
             if (bounds.Width < MinimumSize.Width) return;
-            (float mz, float mx, float my) = _map.GetView();
+            (float mz, float mlat, float mlng) = _map.GetView();
             var s = new SavedWindowState(bounds.X, bounds.Y, bounds.Width, bounds.Height,
                                     _contentSplit.SplitterDistance, WindowState == FormWindowState.Maximized,
-                                    mz, mx, my);
+                                    mz, mlat, mlng);
             File.WriteAllText(StatePath, System.Text.Json.JsonSerializer.Serialize(s));
         }
         catch { /* best effort */ }
@@ -304,7 +305,7 @@ public sealed class MainForm : Form
             Location = new Point(Math.Max(s.X, -4), Math.Max(s.Y, -4));
             Size = new Size(s.W, s.H);
             _restoreSplitter = s.Splitter;
-            if (s.MapZoom > 0) _restoreMap = (s.MapZoom, s.MapPanX, s.MapPanY);
+            if (s.MapZoom > 0) _restoreMap = (s.MapZoom, s.MapCenterLat, s.MapCenterLng);
             if (s.Maximized) WindowState = FormWindowState.Maximized;
         }
         catch { /* best effort */ }

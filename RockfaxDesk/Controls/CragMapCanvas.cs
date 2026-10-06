@@ -15,9 +15,10 @@ internal sealed class CragPoint
 }
 
 /// <summary>
-/// Pannable, zoomable crag map over a dark OpenStreetMap basemap (CARTO "dark_all"
-/// raster tiles, Web Mercator / slippy-map projection). Crag dots glow on top;
-/// hover labels, click-to-open, on-canvas zoom controls, km scale bar, attribution.
+/// Pannable, zoomable crag map over a dark-remapped OpenStreetMap basemap
+/// (raster tiles, Web Mercator / slippy-map projection). Crag dots glow on top;
+/// place labels fade in with zoom, hover labels, click-to-open, on-canvas zoom
+/// controls, cursor-coordinate chip, km scale bar, attribution.
 /// Free-sample crags burn amber.
 /// </summary>
 internal sealed class CragMapCanvas : Control
@@ -35,10 +36,33 @@ internal sealed class CragMapCanvas : Control
     private CragPoint? _selected;
     private int _clusterCount;
     private Point _hoverPoint;
+    private bool _mouseInside;
 
     private readonly TileCache _tiles;
 
+    // Dot brushes/pen are per-paint hot paths (thousands of dots); allocate once.
+    private readonly SolidBrush _coreNormal = new(Color.FromArgb(96, 175, 235));
+    private readonly SolidBrush _coreBig = new(Color.FromArgb(215, 240, 255));
+    private readonly SolidBrush _coreFree = new(Ui.Amber);
+    private readonly SolidBrush _glowNormal = new(Color.FromArgb(34, 96, 175, 235));
+    private readonly SolidBrush _glowFree = new(Color.FromArgb(56, Ui.Amber));
+    private readonly Pen _dotRing = new(Color.FromArgb(150, 8, 13, 25), 1.4f);
+
     public event Action<CragPoint>? CragSelected;
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _coreNormal.Dispose();
+            _coreBig.Dispose();
+            _coreFree.Dispose();
+            _glowNormal.Dispose();
+            _glowFree.Dispose();
+            _dotRing.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 
     public CragMapCanvas()
     {
@@ -154,11 +178,13 @@ internal sealed class CragMapCanvas : Control
         }
 
         DrawDots(g, e.ClipRectangle);
+        DrawPlaceLabels(g, e.ClipRectangle);
         DrawHoverAndSelection(g);
         DrawLegend(g);
         DrawScaleBar(g);
         DrawAttribution(g);
         DrawZoomControls(g);
+        DrawCursorCoords(g);
     }
 
     /// <summary>Draws the visible OpenStreetMap tiles (pre-darkened at decode); missing ones are fetched in the background.</summary>
@@ -244,25 +270,84 @@ internal sealed class CragMapCanvas : Control
 
     private void DrawDots(Graphics g, Rectangle clip)
     {
+        bool simple = _zoom < 6; // country overview: plain dots, no glow/ring (thousands of them)
         foreach (CragPoint p in _points)
         {
             (float x, float y) = Project(p);
             if (x < clip.Left - 12 || x > clip.Right + 12 || y < clip.Top - 12 || y > clip.Bottom + 12) continue;
 
-            Color core = p.Free ? Ui.Amber : p.NRoutes > 100 ? Color.FromArgb(215, 240, 255) : Color.FromArgb(96, 175, 235);
+            bool big = p.NRoutes > 100;
+            SolidBrush core = p.Free ? _coreFree : big ? _coreBig : _coreNormal;
             float r = _zoom < 6 ? 1.8f
-                    : p.NRoutes > 100 ? 5f
+                    : big ? 5f
                     : p.NRoutes > 20 ? 4f
                     : 3f;
             if (_zoom >= 10) r += 1.5f;
 
-            using (var glow = new SolidBrush(Color.FromArgb(p.Free ? 56 : 34, core)))
+            if (!simple)
+            {
+                SolidBrush glow = p.Free ? _glowFree : _glowNormal;
                 g.FillEllipse(glow, x - r * 2.2f, y - r * 2.2f, r * 4.4f, r * 4.4f);
-            using (var ring = new Pen(Color.FromArgb(150, 8, 13, 25), 1.4f))
-                g.DrawEllipse(ring, x - r / 2, y - r / 2, r, r);
-            using var coreBrush = new SolidBrush(core);
-            g.FillEllipse(coreBrush, x - r / 2, y - r / 2, r, r);
+                g.DrawEllipse(_dotRing, x - r / 2, y - r / 2, r, r);
+            }
+            g.FillEllipse(core, x - r / 2, y - r / 2, r, r);
         }
+    }
+
+    /// <summary>
+    /// Progressive place labels: significant crags get their name under the dot once
+    /// the zoom justifies it (threshold drops as you zoom in). Labels are placed
+    /// most-significant-first with rectangle anti-collision so they never stack.
+    /// </summary>
+    private void DrawPlaceLabels(Graphics g, Rectangle clip)
+    {
+        if (_zoom < 8.5) return;
+        double minRoutes = _zoom >= 13 ? 8 : _zoom >= 11.5 ? 25 : _zoom >= 10 ? 80 : 200;
+
+        var candidates = new List<(CragPoint P, float X, float Y)>();
+        foreach (CragPoint p in _points)
+        {
+            if (p.NRoutes < minRoutes || ReferenceEquals(p, _hover) || ReferenceEquals(p, _selected)) continue;
+            (float x, float y) = Project(p);
+            if (x < clip.Left - 50 || x > clip.Right + 50 || y < clip.Top - 20 || y > clip.Bottom + 20) continue;
+            candidates.Add((p, x, y));
+        }
+        if (candidates.Count == 0) return;
+        candidates.Sort((a, b) => b.P.NRoutes.CompareTo(a.P.NRoutes));
+
+        var occupied = new List<Rectangle>();
+        using var halo = new SolidBrush(Color.FromArgb(170, 8, 13, 25));
+        foreach (var (p, x, y) in candidates)
+        {
+            SizeF size = TextRenderer.MeasureText(p.Title, Ui.Small);
+            var rect = new Rectangle((int)(x - size.Width / 2) - 2, (int)y + 6, (int)size.Width + 4, (int)size.Height);
+            if (occupied.Any(r => r.IntersectsWith(rect))) continue;
+            occupied.Add(rect);
+
+            // dark halo in 8 directions, then the label
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    TextRenderer.DrawText(g, p.Title, Ui.Small, new Point(rect.X + 2 + dx, rect.Y + dy), halo.Color);
+                }
+            TextRenderer.DrawText(g, p.Title, Ui.Small, new Point(rect.X + 2, rect.Y), Color.FromArgb(228, 216, 226, 246));
+        }
+    }
+
+    /// <summary>Live cursor coordinate chip, top-left — the "pro map" touch.</summary>
+    private void DrawCursorCoords(Graphics g)
+    {
+        if (!_mouseInside) return;
+        (double lat, double lng) = ScreenToLatLng(_hoverPoint);
+        string text = $"{Math.Abs(lat):0.00}°{(lat >= 0 ? "N" : "S")}  {Math.Abs(lng):0.00}°{(lng >= 0 ? "E" : "W")}   ·   zoom ×{_zoom:0.0}";
+        SizeF size = TextRenderer.MeasureText(text, Ui.Small);
+        var box = new Rectangle(10, 12, (int)size.Width + 16, (int)size.Height + 8);
+        using var back = new SolidBrush(Color.FromArgb(170, 8, 13, 25));
+        g.FillRectangle(back, box);
+        using var edge = new Pen(Ui.Border);
+        g.DrawRectangle(edge, box);
+        TextRenderer.DrawText(g, text, Ui.Small, new Point(box.X + 8, box.Y + 4), Ui.Muted);
     }
 
     private void DrawHoverAndSelection(Graphics g)
@@ -305,7 +390,7 @@ internal sealed class CragMapCanvas : Control
 
     private void DrawLegend(Graphics g)
     {
-        const string legend = "● amber = free sample    ● large = 100+ routes    drag = pan    wheel = zoom    click a dot = open crag";
+        const string legend = "● amber = free sample    ● large = 100+ routes    drag = pan    wheel / double-click = zoom    click a dot = open crag";
         SizeF size = TextRenderer.MeasureText(legend, Ui.Small);
         var box = new Rectangle(10, Height - (int)size.Height - 30, (int)size.Width + 16, (int)size.Height + 8);
         using (var back = new SolidBrush(Color.FromArgb(170, 8, 13, 25)))
@@ -383,6 +468,7 @@ internal sealed class CragMapCanvas : Control
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
+        _mouseInside = true;
         if (_dragging)
         {
             _pan = new PointF(_panStart.X + (e.X - _dragMouseStart.X), _panStart.Y + (e.Y - _dragMouseStart.Y));
@@ -423,9 +509,22 @@ internal sealed class CragMapCanvas : Control
         base.OnMouseUp(e);
     }
 
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        _mouseInside = false;
+        if (_hover is not null || _clusterCount != 0)
+        {
+            _hover = null;
+            _clusterCount = 0;
+            Invalidate();
+        }
+        base.OnMouseLeave(e);
+    }
+
     protected override void OnDoubleClick(EventArgs e)
     {
-        if (e is MouseEventArgs me && !InZoomArea(me.Location)) ZoomBy(1.5, me.Location);
+        if (e is MouseEventArgs me && !InZoomArea(me.Location))
+            ZoomBy(me.Button == MouseButtons.Right ? 1 / 1.5 : 1.5, me.Location);
         base.OnDoubleClick(e);
     }
 
