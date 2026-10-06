@@ -116,6 +116,31 @@ internal sealed class CragMapCanvas : Control
         if (_selected is not null) Invalidate();
     }
 
+    /// <summary>Zooms so the given crags all fit with padding (toolbar fit button).</summary>
+    public void FitTo(IReadOnlyList<CragPoint> points)
+    {
+        if (points.Count == 0) return;
+        double minLat = points.Min(p => (double)p.Lat), maxLat = points.Max(p => (double)p.Lat);
+        double minLng = points.Min(p => (double)p.Lng), maxLng = points.Max(p => (double)p.Lng);
+        _center = (clampLat((float)((minLat + maxLat) / 2)), (float)((minLng + maxLng) / 2));
+        _pan = PointF.Empty;
+        _hover = null;
+
+        double spanLngPx = Math.Max((maxLng - minLng) / 360.0 * 256.0, 0.02);
+        double spanLatPx = Math.Max(MercY(maxLat) - MercY(minLat), 0.02);
+        double zx = Math.Log2(Width * 0.8 / spanLngPx);
+        double zy = Math.Log2(Height * 0.8 / spanLatPx);
+        _zoom = Math.Clamp(Math.Min(zx, zy), MinZoom, MaxZoom);
+        Invalidate();
+    }
+
+    /// <summary>Global Web-Mercator Y at zoom 0, in pixels (256-px tiles).</summary>
+    private static double MercY(double latDeg)
+    {
+        double latRad = latDeg * Math.PI / 180.0;
+        return (1.0 - Math.Log(Math.Tan(latRad) + 1.0 / Math.Cos(latRad)) / Math.PI) / 2.0 * 256.0;
+    }
+
     /// <summary>Centers the view on a coordinate at a given zoom (crag page "show on map").</summary>
     public void CenterOn(float lat, float lng, float zoom)
     {
@@ -429,12 +454,14 @@ internal sealed class CragMapCanvas : Control
         TextRenderer.DrawText(g, attribution, Ui.Tiny, new Point(box.X + 4, box.Y + 1), Color.FromArgb(120, 138, 165));
     }
 
+    private Rectangle FitRect => new(Width - 148, 12, 32, 28);
     private Rectangle ZoomInRect => new(Width - 112, 12, 32, 28);
     private Rectangle ZoomOutRect => new(Width - 76, 12, 32, 28);
     private Rectangle ZoomResetRect => new(Width - 40, 12, 28, 28);
 
     private void DrawZoomControls(Graphics g)
     {
+        DrawZoomButton(g, FitRect, "⤢", _points.Count > 0);
         DrawZoomButton(g, ZoomInRect, "+", _zoom < MaxZoom);
         DrawZoomButton(g, ZoomOutRect, "−", _zoom > MinZoom);
         DrawZoomButton(g, ZoomResetRect, "⌂", true);
@@ -453,7 +480,7 @@ internal sealed class CragMapCanvas : Control
     // ---- interaction ----------------------------------------------------------
 
     private bool InZoomArea(Point p)
-        => ZoomInRect.Contains(p) || ZoomOutRect.Contains(p) || ZoomResetRect.Contains(p);
+        => FitRect.Contains(p) || ZoomInRect.Contains(p) || ZoomOutRect.Contains(p) || ZoomResetRect.Contains(p);
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
@@ -499,7 +526,8 @@ internal sealed class CragMapCanvas : Control
 
         if (e.Button == MouseButtons.Left)
         {
-            if (ZoomInRect.Contains(e.Location)) ZoomBy(1.5, e.Location);
+            if (FitRect.Contains(e.Location)) FitTo(_points);
+            else if (ZoomInRect.Contains(e.Location)) ZoomBy(1.5, e.Location);
             else if (ZoomOutRect.Contains(e.Location)) ZoomBy(1 / 1.5, e.Location);
             else if (ZoomResetRect.Contains(e.Location)) ResetView();
             else if (!wasDrag && Nearest(e.Location, 10) is { } crag)
@@ -507,6 +535,21 @@ internal sealed class CragMapCanvas : Control
                 _selected = crag;
                 CragSelected?.Invoke(crag);
             }
+        }
+        else if (e.Button == MouseButtons.Right && !wasDrag)
+        {
+            (double lat, double lng) = ScreenToLatLng(e.Location);
+            string coords = $"{lat:0.000000}, {lng:0.000000}";
+            Ui.Menu(
+                ("Copy coordinates", () =>
+                {
+                    try { Clipboard.SetText(coords); } catch { /* clipboard busy */ }
+                }),
+                ("Open in Google Maps ↗", () => Jx.OpenBrowser(
+                    $"https://www.google.com/maps/search/?api=1&query={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lng.ToString(System.Globalization.CultureInfo.InvariantCulture)}")),
+                ("Open in OpenStreetMap ↗", () => Jx.OpenBrowser(
+                    $"https://www.openstreetmap.org/?mlat={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}&mlon={lng.ToString(System.Globalization.CultureInfo.InvariantCulture)}#map={(int)_zoom}/{lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}/{lng.ToString(System.Globalization.CultureInfo.InvariantCulture)}"))
+            ).Show(this, e.Location);
         }
         base.OnMouseUp(e);
     }
