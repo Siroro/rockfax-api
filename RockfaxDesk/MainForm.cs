@@ -167,7 +167,8 @@ public sealed class MainForm : Form
             if (arg.StartsWith("--crag=", StringComparison.Ordinal) && int.TryParse(arg[7..], out int cragId))
                 await OpenCragAsync(cragId, "");
         if (args.Contains("--top10")) { _tabs.Select(4); await _top10View.LoadAsync(); }
-        Text = $"Rockfax Explorer — unofficial UKClimbing client  [tab {_tabs.SelectedIndex}]";
+        // (hooks above are used by the screenshot harness: shot.ps1)
+        _lblStatus.Text = "ready — Ctrl+F to search";
     }
 
     // ---- layout builders -----------------------------------------------------

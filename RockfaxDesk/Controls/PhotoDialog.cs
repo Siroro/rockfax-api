@@ -34,6 +34,10 @@ internal sealed class PhotoDialog : Form
         };
         dialog.Controls.Add(box);
         dialog.Controls.Add(caption);
+        dialog.KeyPreview = true;
+        dialog.KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) dialog.Close(); };
+        box.Click += (_, _) => dialog.Close();
+        caption.Click += (_, _) => dialog.Close();
         dialog.ShowDialog();
         full.Dispose();
     }

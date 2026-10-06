@@ -11,6 +11,10 @@ internal sealed class CragView : UserControl
     private readonly Panel _content = new() { Dock = DockStyle.Fill, BackColor = Ui.Bg };
 
     private readonly Label _lblTitle = Ui.Label("", Ui.Text, Ui.H1);
+    private readonly FlowLayoutPanel _metaChips = new()
+    {
+        Dock = DockStyle.Right, BackColor = Ui.Bg, WrapContents = false, Padding = new Padding(0, 8, 10, 0),
+    };
     private readonly FlowLayoutPanel _grades = new()
     {
         Dock = DockStyle.Top, Height = 34, BackColor = Ui.Bg, Padding = new Padding(12, 4, 0, 0), WrapContents = false,
@@ -62,6 +66,7 @@ internal sealed class CragView : UserControl
 
         var titleRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = Ui.Bg, Padding = new Padding(10, 2, 0, 0) };
         titleRow.Controls.Add(_lblTitle);
+        titleRow.Controls.Add(_metaChips);
         var routesHeader = Ui.SectionHeader("ROUTES — double-click for details", 26);
         var weatherHeader = Ui.SectionHeader("WEATHER", 24);
 
@@ -122,6 +127,9 @@ internal sealed class CragView : UserControl
                     JsonElement crag = cragEntry.Value;
                     if (crag.ValueKind != JsonValueKind.Object) continue;
                     if (cragName.Length == 0) cragName = crag.Str("name");
+                    string area = crag.Str("areaName");
+                    if (area.Length > 0 && _metaChips.Controls.Count == 1)
+                        _metaChips.Controls.Add(Ui.Chip(area, Ui.Accent));
 
                     if (crag.TryGetProperty("gradeColors", out JsonElement grades) && grades.ValueKind == JsonValueKind.Array)
                     {
@@ -137,6 +145,8 @@ internal sealed class CragView : UserControl
                 }
             }
             _lblTitle.Text = cragName.Length > 0 ? cragName : $"Crag {ukcCragId}";
+            _metaChips.Controls.Clear();
+            _metaChips.Controls.Add(Ui.Chip($"UKC #{ukcCragId}", Ui.Muted));
 
             if (root.TryGetProperty("routes", out JsonElement routes) && routes.ValueKind == JsonValueKind.Array)
             {

@@ -1,5 +1,9 @@
 # RockfaxApi — unofficial C# client for the Rockfax / UKClimbing app API
 
+| Crag map (~26,600 crags, free samples in amber) | Route page (comments, photos) |
+|---|---|
+| ![Crag map](docs/screenshot-map.png) | ![Route page](docs/screenshot-route.png) |
+
 Reverse engineered from the Rockfax Android app (`com.rockfax.rockfax.rockfax`, version code 3100).
 Everything here replicates what the app's `com.rockfax.rockfax.ukcapi` package puts on the wire.
 
@@ -180,18 +184,24 @@ await client.AddAscentsAsync(client.UserId, new[]
 
 ## Desktop app
 
-`RockfaxDesk` is a WinForms front-end (net8.0-windows) built on the library:
+`RockfaxDesk` is a WinForms front-end (net8.0-windows) built on the library — a dark,
+screenshot-tested UI (`shot.ps1` + `--goto/--search/--crag/--top10/--freecrags` dev hooks
+drive it headlessly for captures):
 
-- **Route pages** — description, first ascent, height/pitches, community comments,
-  and a photo strip (thumbnails from cdn.ukc2.com, click for full size).
-- **Crag pages** — grade distribution (green/orange/red/black), the full route list
-  (double-click any route), a weather forecast strip, and crag photos.
-- **Crag map** — every one of the ~26,600 UKC crags as a pannable, zoomable dot plot;
-  hover for names, click a dot to open the crag. Free-sample crags highlight in orange.
-- **Search & lists** — route search, crag name filter, busiest-crags list, free crags.
-- **Logbook** — log in with your UKClimbing account to browse your ascents
-  (with style names) and wishlist; double-click an ascent to open the route.
-- **Top 10** — the weekly top-ten photo grid.
+- **Route pages** — grade/star chips, description, first ascent, height/pitches,
+  the live community comments thread, and a photo strip (click for full size;
+  thumbnails fall back to full images when the CDN lacks a t_300h variant).
+- **Crag pages** — grade-distribution chips (Mod–VD / S–HS / VS–HVS / E1+), a
+  seven-day weather card strip, the route list grouped by buttress, and crag photos.
+- **Crag map** — every UKC crag as a pannable, zoomable dot plot with a degree
+  graticule, glow-by-popularity, hover labels, on-canvas zoom controls, and
+  free-sample crags in amber. The viewport is pinned to Britain + Ireland because
+  the marker feed contains overseas crags and bad rows.
+- **Search & lists** — route search (Enter), crag filter, busiest-crags, free crags.
+- **Logbook** — sign in with your UKClimbing account for your ascents (UKC style
+  names decoded) and wishlist; double-click an ascent to open the route.
+- **Top 10** — the weekly photo grid with rank badges and ratings.
+- Keyboard: **Ctrl+F** focuses search, **Enter** searches/opens, **Esc** clears.
 
 ```bash
 dotnet run --project RockfaxDesk            # GUI
