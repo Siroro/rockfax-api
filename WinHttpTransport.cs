@@ -39,7 +39,7 @@ public sealed class WinHttpTransport : HttpMessageHandler
 
     [DllImport("winhttp.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr WinHttpOpenRequest(IntPtr connection, string verb, string objectName,
-        string version, IntPtr referer, IntPtr acceptTypes, int flags);
+        string? version, IntPtr referer, IntPtr acceptTypes, int flags);
 
     [DllImport("winhttp.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern bool WinHttpAddRequestHeaders(IntPtr request, string headers, int headerLength, int modifiers);

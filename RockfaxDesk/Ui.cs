@@ -144,6 +144,9 @@ internal static class Ui
 /// </summary>
 internal sealed class UiList : ListView
 {
+    [System.Runtime.InteropServices.DllImport("uxtheme.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int SetWindowTheme(IntPtr hWnd, string? subAppName, string? subIdList);
+
     /// <summary>Column index → text ink for that column (empty = default).</summary>
     public readonly Dictionary<int, Color> ColumnInk = new();
 
@@ -162,6 +165,15 @@ internal sealed class UiList : ListView
         DrawColumnHeader += DrawHeader;
         DrawSubItem += DrawItem;
         Resize += (_, _) => StretchLastColumn();
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        if (OperatingSystem.IsWindowsVersionAtLeast(10))
+        {
+            try { SetWindowTheme(Handle, "DarkMode_Explorer", null); } catch { /* best effort */ }
+        }
     }
 
     /// <summary>Stretches the last column so the header band has no unpainted gap.</summary>
@@ -263,6 +275,8 @@ internal sealed class TabStrip : Panel
         _tabs.Add((b, content));
         if (_selected < 0) Select(0);
     }
+
+    public int SelectedIndex => _selected;
 
     public void Select(int index)
     {

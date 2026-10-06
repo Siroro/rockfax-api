@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using RockfaxApi;
 using RockfaxDesk.Controls;
@@ -55,6 +56,19 @@ public sealed class MainForm : Form
         Padding = new Padding(10, 0, 0, 0),
         Text = "ready — Ctrl+F to search",
     };
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        if (OperatingSystem.IsWindowsVersionAtLeast(10))
+        {
+            int on = 1;
+            try { _ = DwmSetWindowAttribute(Handle, 20, ref on, 4); } catch { } // dark title bar
+        }
+    }
 
     public MainForm()
     {
@@ -124,11 +138,32 @@ public sealed class MainForm : Form
         };
     }
 
-    protected override void OnShown(EventArgs e)
+    protected override async void OnShown(EventArgs e)
     {
         base.OnShown(e);
         // SplitterDistance is only reliable once the container has a real size.
         _contentSplit.SplitterDistance = 390;
+
+        // Warm the crag cache so the map/crag lists feel instant.
+        try
+        {
+            _lblStatus.Text = "warming the crag map…";
+            await EnsureCragPointsAsync();
+            _lblStatus.Text = "ready — Ctrl+F to search";
+        }
+        catch { /* offline is fine; lists load on demand */ }
+
+        // Dev/screenshot hooks: --goto=N [--search=text] [--freecrags]
+        string[] args = Program.StartupArgs;
+        foreach (string arg in args)
+        {
+            if (arg.StartsWith("--goto=", StringComparison.Ordinal) && int.TryParse(arg[7..], out int tab))
+                _tabs.Select(tab);
+            if (arg.StartsWith("--search=", StringComparison.Ordinal))
+                await SearchAsync(Uri.UnescapeDataString(arg[9..]));
+        }
+        if (args.Contains("--freecrags")) await LoadFreeCragsAsync();
+        Text = $"Rockfax Explorer — unofficial UKClimbing client  [tab {_tabs.SelectedIndex}]";
     }
 
     // ---- layout builders -----------------------------------------------------
