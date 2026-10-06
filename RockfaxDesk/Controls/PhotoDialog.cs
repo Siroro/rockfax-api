@@ -16,7 +16,7 @@ internal sealed class PhotoDialog : Form
     private readonly Label _caption = new()
     {
         Dock = DockStyle.Bottom, Height = 44, TextAlign = ContentAlignment.MiddleLeft,
-        ForeColor = Color.Gainsboro, Font = new Font("Segoe UI", 10f), Padding = new Padding(10, 0, 0, 0),
+        ForeColor = Color.Gainsboro, Font = Ui.Body, Padding = new Padding(10, 0, 0, 0),
     };
     private Image? _current;
 

@@ -436,7 +436,6 @@ internal sealed class CragView : UserControl
 internal sealed class WeatherChip : Control
 {
     private static readonly SolidBrush CardFill = new(Ui.Card);
-    private static readonly Pen CardBorder = new(Ui.Border);
 
     public string Day = "";
     public int Temp, RainPct, Wind, Code;
@@ -471,8 +470,7 @@ internal sealed class WeatherChip : Control
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         var card = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = Ui.RoundedPath(card, 9);
-        g.FillPath(CardFill, path);
-        g.DrawPath(CardBorder, path);
+        g.FillPath(CardFill, path); // fill lift only — no border stroke
 
         TextRenderer.DrawText(g, Day, Ui.BodyBold, new Point(10, 7), Ui.Accent);
         Color tempInk = Temp >= 18 ? Ui.Amber : Temp <= 4 ? Ui.Accent : Ui.Text;

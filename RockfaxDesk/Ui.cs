@@ -27,41 +27,36 @@ internal static class Ui
     public static readonly Color Red       = Color.FromArgb(248, 113, 113);
 
     // ---- type ramp ----------------------------------------------------------
-    public static Font H1 { get; } = new("Segoe UI Semibold", 16.5f);
-    public static Font H2 { get; } = new("Segoe UI Semibold", 12f);
-    public static Font Body { get; } = new("Segoe UI", 9.75f);
-    public static Font BodyBold { get; } = new("Segoe UI Semibold", 9.75f);
-    public static Font Small { get; } = new("Segoe UI", 9f);
-    public static Font Tiny { get; } = new("Segoe UI", 8.25f);
-    public static Font Mono { get; } = new("Consolas", 9.75f);
-    public static Font MonoBig { get; } = new("Consolas", 11.5f, FontStyle.Bold);
+    // Segoe UI Variable (Win11) with plain Segoe UI as fallback; Cascadia Mono for
+    // numbers, falling back to Consolas. One place to retune the whole app.
+    private static readonly string BodyFamily = FamilyOr("Segoe UI Variable Text", "Segoe UI");
+    private static readonly string DisplayFamily = FamilyOr("Segoe UI Variable Display", BodyFamily);
+    private static readonly string MonoFamily = FamilyOr("Cascadia Mono", "Consolas");
+
+    private static string FamilyOr(string preferred, string fallback)
+        => FontFamily.Families.Any(f => f.Name == preferred) ? preferred : fallback;
+
+    public static Font H1 { get; } = new(DisplayFamily, 17f, FontStyle.Bold);
+    public static Font H2 { get; } = new(DisplayFamily, 11.5f, FontStyle.Bold);
+    public static Font Body { get; } = new(BodyFamily, 10f);
+    public static Font BodyBold { get; } = new(BodyFamily, 10f, FontStyle.Bold);
+    public static Font Small { get; } = new(BodyFamily, 9.25f);
+    public static Font SmallBold { get; } = new(BodyFamily, 9.25f, FontStyle.Bold);
+    public static Font Tiny { get; } = new(BodyFamily, 8.5f);
+    public static Font Mono { get; } = new(MonoFamily, 9.75f);
+    public static Font MonoBig { get; } = new(MonoFamily, 11.5f, FontStyle.Bold);
 
     // ---- factories ----------------------------------------------------------
 
     public static Button Button(string text, int width = 96, bool primary = false, bool danger = false)
     {
         Color face = danger ? Color.FromArgb(70, 26, 30) : primary ? AccentDim : Panel;
-        Color line = danger ? Red : primary ? Accent : Border;
         Color ink = danger ? Red : primary ? Accent : Text;
-        var b = new Button
+        return new UiButton(text, face, ink)
         {
-            Text = text,
             Width = width,
-            Height = 30,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = face,
-            ForeColor = ink,
-            Font = BodyBold,
-            Cursor = Cursors.Hand,
-            Margin = new Padding(0, 0, 8, 0),
-            TabStop = false,
+            Height = 32,
         };
-        b.FlatAppearance.BorderSize = 1;
-        b.FlatAppearance.BorderColor = line;
-        b.FlatAppearance.MouseOverBackColor = Color.FromArgb(
-            Math.Min(face.R + 22, 255), Math.Min(face.G + 22, 255), Math.Min(face.B + 22, 255));
-        b.FlatAppearance.MouseDownBackColor = AccentDim;
-        return b;
     }
 
     /// <summary>Borderless dark textbox wrapped in a 1px accent-on-focus border. Dock the returned panel.</summary>
@@ -75,27 +70,56 @@ internal static class Ui
         return tb;
     }
 
+    /// <summary>Rounded input well: dark fill, borderless at rest; a soft accent ring
+    /// appears only while the inner textbox holds focus. Wrap via Ui.Box.</summary>
+    internal sealed class InputWell : Panel
+    {
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool FocusedInner { get; set; }
+
+        public InputWell()
+        {
+            DoubleBuffered = true;
+            ResizeRedraw = true;
+            BackColor = Ui.Bg; // corners outside the rounded well show the host
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using var path = Ui.RoundedPath(rect, Math.Min(9, rect.Height / 2));
+            using (var fill = new SolidBrush(Ui.Lighten(Ui.BgDeep, FocusedInner ? 6 : 0)))
+                g.FillPath(fill, path);
+            if (FocusedInner)
+            {
+                using var ring = new Pen(Ui.Accent, 1.75f);
+                g.DrawPath(ring, path);
+            }
+        }
+    }
+
     public static Panel Box(TextBox tb, int width, int height = 30, string? cue = null)
     {
         tb.BorderStyle = BorderStyle.None;
         tb.BackColor = BgDeep;
         tb.ForeColor = Text;
+        tb.Font = Body;
         tb.Margin = Padding.Empty;
-        Panel wrapper = new()
+        var well = new InputWell
         {
             Width = width,
             Height = height,
-            BackColor = Border,
             Margin = new Padding(0, 0, 10, 0),
-            Padding = Padding.Empty,
         };
         tb.Dock = DockStyle.Fill;
-        wrapper.Padding = new Padding(8, Math.Max(0, (height - tb.Height) / 2), 8, 0);
-        wrapper.Controls.Add(tb);
-        tb.GotFocus += (_, _) => wrapper.BackColor = Accent;
-        tb.LostFocus += (_, _) => wrapper.BackColor = Border;
+        well.Padding = new Padding(12, Math.Max(0, (height - tb.Height) / 2), 12, 0);
+        well.Controls.Add(tb);
+        tb.GotFocus += (_, _) => { well.FocusedInner = true; well.Invalidate(); };
+        tb.LostFocus += (_, _) => { well.FocusedInner = false; well.Invalidate(); };
         if (cue is not null) SendMessage(tb.Handle, 0x1501, 1, cue); // after handle (re)creation
-        return wrapper;
+        return well;
     }
 
     public static Label Label(string text, Color? color = null, Font? font = null, bool auto = true)
@@ -120,6 +144,10 @@ internal static class Ui
         path.CloseFigure();
         return path;
     }
+
+    /// <summary>Channels clamped upward — used for hover tints on painted controls.</summary>
+    public static Color Lighten(Color c, int amount) => Color.FromArgb(
+        Math.Min(c.R + amount, 255), Math.Min(c.G + amount, 255), Math.Min(c.B + amount, 255));
 
     /// <summary>Rounded pill chip: border + centered bold text, subtle hover lightening
     /// (set Cursor=Hand where clickable). Replaces the old flat Label chips.</summary>
@@ -180,34 +208,30 @@ internal sealed class DarkMenuColors : ProfessionalColorTable
     public override Color SeparatorLight => Ui.Border;
 }
 
-/// <summary>Rounded pill chip on the app palette: 1px border, centered bold text,
-/// hover lightening. Clickable callers set Cursor = Hand and wire Click.</summary>
+/// <summary>Rounded tag chip on the app palette: soft fill + centered bold text, no
+/// border — the fill lift alone separates it from the page. Hover lightens; clickable
+/// callers set Cursor = Hand and wire Click.</summary>
 internal sealed class UiChip : Control
 {
-    private readonly Color _ink, _fill, _line, _hotFill, _hotLine;
+    private readonly Color _ink, _fill, _hotFill;
     private bool _hot;
 
-    public UiChip(string text, Color ink, Color? fill = null, Color? line = null)
+    public UiChip(string text, Color ink, Color? fill = null)
     {
         Text = text;
         Font = Ui.BodyBold;
         _ink = ink;
         _fill = fill ?? Ui.Card;
-        _line = line ?? Ui.Border;
-        _hotFill = Lighten(_fill, 14);
-        _hotLine = Lighten(_line, 26);
+        _hotFill = Ui.Lighten(_fill, 14);
         BackColor = Ui.Bg; // every chip host sits on Bg; the pill paints itself
         DoubleBuffered = true;
         ResizeRedraw = true;
         TabStop = false;
         Margin = new Padding(0, 0, 6, 0);
-        Size = PreferredSize();
+        Size = Measure();
     }
 
-    private static Color Lighten(Color c, int amount) => Color.FromArgb(
-        Math.Min(c.R + amount, 255), Math.Min(c.G + amount, 255), Math.Min(c.B + amount, 255));
-
-    private Size PreferredSize()
+    private Size Measure()
     {
         Size text = TextRenderer.MeasureText(Text, Font);
         return new Size(text.Width + 22, text.Height + 9);
@@ -216,7 +240,7 @@ internal sealed class UiChip : Control
     protected override void OnTextChanged(EventArgs e)
     {
         base.OnTextChanged(e);
-        Size = PreferredSize();
+        Size = Measure();
         Invalidate();
     }
 
@@ -231,8 +255,6 @@ internal sealed class UiChip : Control
         using var path = Ui.RoundedPath(rect, Math.Min(9, rect.Height / 2));
         using (var brush = new SolidBrush(_hot ? _hotFill : _fill))
             g.FillPath(brush, path);
-        using (var pen = new Pen(_hot ? _hotLine : _line))
-            g.DrawPath(pen, path);
         TextRenderer.DrawText(g, Text, Font, rect, _ink,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
     }
@@ -476,6 +498,52 @@ internal sealed class UiList : ListView
     }
 }
 
+/// <summary>Rounded flat button, fully owner-painted (soft fill + centered bold text,
+/// borderless) with hot/pressed/disabled states. Keeps Button semantics (Click, PerformClick).</summary>
+internal sealed class UiButton : Button
+{
+    private readonly Color _face, _ink, _hotFace, _downFace, _dimFace;
+    private bool _hot, _pressed;
+
+    public UiButton(string text, Color face, Color ink)
+    {
+        Text = text;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
+                 | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        _face = face;
+        _ink = ink;
+        _hotFace = Ui.Lighten(face, 12);
+        _downFace = Ui.AccentDim;
+        _dimFace = Ui.Panel;
+        Font = Ui.BodyBold;
+        BackColor = Ui.Bg;
+        ForeColor = ink;
+        FlatStyle = FlatStyle.Flat; // keeps native focus/keyboard plumbing quiet
+        Cursor = Cursors.Hand;
+        Margin = new Padding(0, 0, 8, 0);
+        TabStop = false;
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Invalidate(); }
+    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hot = false; _pressed = false; Invalidate(); }
+    protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e); if (e.Button == MouseButtons.Left) { _pressed = true; Invalidate(); } }
+    protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); _pressed = false; Invalidate(); }
+    protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        Graphics g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        using var path = Ui.RoundedPath(rect, Math.Min(9, rect.Height / 2));
+        Color face = !Enabled ? _dimFace : _pressed ? _downFace : _hot ? _hotFace : _face;
+        using (var brush = new SolidBrush(face))
+            g.FillPath(brush, path);
+        TextRenderer.DrawText(g, Text, Font, rect, Enabled ? _ink : Ui.Muted,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+    }
+}
+
 /// <summary>
 /// Custom tab strip + host: flat dark headers with an accent underline for the active
 /// tab (no owner-drawn TabControl edge artifacts). Content panels are switched by index.
@@ -485,7 +553,7 @@ internal sealed class TabStrip : Panel
     private readonly Panel _host = new() { Dock = DockStyle.Fill, BackColor = Ui.Bg };
     private readonly FlowLayoutPanel _strip = new()
     {
-        Dock = DockStyle.Top, Height = 40, BackColor = Ui.BgDeep, Padding = new Padding(6, 0, 0, 0), WrapContents = false,
+        Dock = DockStyle.Top, Height = 44, BackColor = Ui.BgDeep, Padding = new Padding(10, 0, 0, 0), WrapContents = false,
     };
     private readonly List<(Button Header, Control Content)> _tabs = new();
     private int _selected = -1;
@@ -510,8 +578,8 @@ internal sealed class TabStrip : Panel
         {
             Text = title,
             AutoSize = true,
-            MinimumSize = new Size(64, 40),
-            Padding = new Padding(18, 0, 18, 0),
+            MinimumSize = new Size(68, 44),
+            Padding = new Padding(20, 0, 20, 0),
             FlatStyle = FlatStyle.Flat,
             BackColor = Ui.BgDeep,
             ForeColor = Ui.Muted,
