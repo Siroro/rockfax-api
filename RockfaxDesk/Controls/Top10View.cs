@@ -11,6 +11,10 @@ internal sealed class Top10View : UserControl
     {
         Dock = DockStyle.Fill, AutoScroll = true, BackColor = Ui.Bg, Padding = new Padding(12),
     };
+
+    static Top10View() { }
+
+    private void ThemeScrollbars() => DarkScroll.Apply(_grid);
     private readonly Label _lblStatus = Ui.Label("", Ui.Amber, Ui.Small);
 
     private RockfaxClient? _api;
@@ -19,6 +23,7 @@ internal sealed class Top10View : UserControl
     public Top10View()
     {
         BackColor = Ui.Bg;
+        ThemeScrollbars();
         var titleRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = Ui.Bg, Padding = new Padding(10, 4, 10, 0) };
         var refresh = Ui.Button("Refresh", 84);
         refresh.Dock = DockStyle.Right;

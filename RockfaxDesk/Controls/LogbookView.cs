@@ -13,6 +13,8 @@ internal sealed class LogbookView : UserControl
     private readonly Label _lblWishlist = Ui.SectionHeader("WISHLIST", 26);
     private readonly SplitContainer _split;
     private readonly TextBox _filter = new();
+    private readonly Panel _filterBox;
+    private readonly Label _empty;
 
     public event Action<RouteSummary>? RouteRequested;
 
@@ -58,11 +60,14 @@ internal sealed class LogbookView : UserControl
         };
 
         var titleRow = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Ui.Bg, Padding = new Padding(10, 6, 10, 0) };
-        var filterBox = Ui.Box(_filter, 230, 30, cue: "filter ascents…");
-        filterBox.Dock = DockStyle.Left;
+        _filterBox = Ui.Box(_filter, 230, 30, cue: "filter ascents…");
+        _filterBox.Dock = DockStyle.Left;
+        _filterBox.Visible = false;
         _filter.TextChanged += (_, _) => ApplyFilter();
-        titleRow.Controls.Add(filterBox);
-        titleRow.Controls.Add(Ui.Label("YOUR LOGBOOK", Ui.Text, Ui.H2));
+        var title = Ui.Label("YOUR LOGBOOK", Ui.Text, Ui.H2);
+        title.Location = new Point(12, 8);
+        titleRow.Controls.Add(_filterBox);
+        titleRow.Controls.Add(title);
 
         _split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, BackColor = Ui.Bg, SplitterWidth = 5 };
         _split.Panel1.BackColor = Ui.Bg;
@@ -78,7 +83,7 @@ internal sealed class LogbookView : UserControl
         _split.Panel2.Controls.Add(_lblWishlist);
         _split.SplitterDistance = 420;
 
-        var empty = new Label
+        _empty = new Label
         {
             Dock = DockStyle.Fill,
             AutoSize = false,
@@ -88,11 +93,10 @@ internal sealed class LogbookView : UserControl
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Ui.Bg,
         };
-        Controls.Add(empty);
+        Controls.Add(_empty);
         Controls.Add(_split);
         Controls.Add(titleRow);
         _split.Visible = false;
-        Tag = empty; // revealed by LoadAsync
     }
 
     public async Task LoadAsync(RockfaxClient api)
