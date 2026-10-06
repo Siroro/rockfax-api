@@ -19,6 +19,10 @@ jobs:
       - name: Build (Release)
         run: dotnet build RockfaxExplorer.slnx -c Release
 
+      # Offline protocol/UI-logic tests; these are hard gates (no network involved).
+      - name: Unit tests
+        run: dotnet test RockfaxApi.Tests/RockfaxApi.Tests.csproj -c Release --no-build
+
       # Exercises the real UI data paths against the live UKC API; kept soft so a
       # third-party hiccup never blocks a push.
       - name: Headless self-test (live API, non-blocking)

@@ -6,11 +6,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The demo and desktop projects live in subfolders; keep them out of the library compile. -->
+    <!-- The demo, desktop and test projects live in subfolders; keep them out of the library compile. -->
     <Compile Remove="RockfaxApi.Demo/**" />
     <Compile Remove="RockfaxDesk/**" />
+    <Compile Remove="RockfaxApi.Tests/**" />
     <None Remove="RockfaxApi.Demo/**" />
     <None Remove="RockfaxDesk/**" />
+    <None Remove="RockfaxApi.Tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RockfaxApi.Tests" />
   </ItemGroup>
 
 </Project>

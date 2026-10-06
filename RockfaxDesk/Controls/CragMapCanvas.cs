@@ -107,7 +107,7 @@ internal sealed class CragMapCanvas : Control
 
     private double WorldSize => 256.0 * Math.Pow(2, _zoom);
 
-    private (double X, double Y) WorldXY(double lat, double lng)
+    internal (double X, double Y) WorldXY(double lat, double lng)
     {
         double x = (lng + 180.0) / 360.0 * WorldSize;
         double latRad = lat * Math.PI / 180.0;
@@ -115,7 +115,7 @@ internal sealed class CragMapCanvas : Control
         return (x, y);
     }
 
-    private (double Lat, double Lng) LatLngFromWorld(double x, double y)
+    internal (double Lat, double Lng) LatLngFromWorld(double x, double y)
     {
         double lng = x / WorldSize * 360.0 - 180.0;
         double n = Math.PI * (1.0 - 2.0 * y / WorldSize);
@@ -130,7 +130,7 @@ internal sealed class CragMapCanvas : Control
         return ((float)(Width / 2.0 + (wx - cx) + _pan.X), (float)(Height / 2.0 + (wy - cy) + _pan.Y));
     }
 
-    private (double Lat, double Lng) ScreenToLatLng(Point screen)
+    internal (double Lat, double Lng) ScreenToLatLng(Point screen)
     {
         (double cx, double cy) = WorldXY(_center.Lat, _center.Lng);
         return LatLngFromWorld(cx + screen.X - Width / 2.0 - _pan.X, cy + screen.Y - Height / 2.0 - _pan.Y);

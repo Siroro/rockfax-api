@@ -157,7 +157,7 @@ internal sealed class LogbookView : UserControl
             foreach (ListViewItem item in _lvAscents.Items)
             {
                 string[] cols = item.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => s.Text).ToArray();
-                string csv = string.Join(",", cols.Select(c => "\"" + c.Replace("\"", "\"\"") + "\""));
+                string csv = string.Join(",", cols.Select(CsvField));
                 lines.Add(csv);
             }
             await File.WriteAllLinesAsync(dialog.FileName, lines);
@@ -168,6 +168,9 @@ internal sealed class LogbookView : UserControl
             _lblStatus.Text = $"export failed: {ex.GetType().Name}: {ex.Message}";
         }
     }
+
+    /// <summary>One RFC-4180 field: always quoted, embedded quotes doubled.</summary>
+    internal static string CsvField(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
 
     public async Task LoadAsync(RockfaxClient api)
     {

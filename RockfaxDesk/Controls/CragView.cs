@@ -229,9 +229,10 @@ internal sealed class CragView : UserControl
 
     private int[] _gradeCounts = Array.Empty<int>();
 
-    private static int GradeBand(string grade)
+    internal static int GradeBand(string grade)
     {
-        if (grade.StartsWith("M") || grade.StartsWith("D") || grade.StartsWith("VD")) return 0;
+        if (grade.StartsWith("M") || grade.StartsWith("D") || grade.StartsWith("VD")
+            || grade.StartsWith("V Diff") || grade.StartsWith("HVD")) return 0;
         if (grade.StartsWith("S") || grade.StartsWith("HS")) return 1;
         if (grade.StartsWith("VS") || grade.StartsWith("HVS")) return 2;
         if (grade.StartsWith("E")) return 3;

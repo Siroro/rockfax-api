@@ -479,7 +479,7 @@ public sealed class RockfaxClient : IDisposable
         }
     }
 
-    private string BuildUrl(string path, string? keyInput, bool nodeApi, out string wirePath)
+    internal string BuildUrl(string path, string? keyInput, bool nodeApi, out string wirePath)
     {
         string host = nodeApi ? NodeBaseUrl : BaseUrl;
 

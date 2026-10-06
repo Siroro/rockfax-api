@@ -234,5 +234,19 @@ dotnet run --project RockfaxApi.Demo -- login you@example.com password
 ## Build
 
 ```
-dotnet build RockfaxApi.csproj    # library, net8.0, no NuGet dependencies
+dotnet build RockfaxApi.csproj    # library, net10.0, no NuGet dependencies
 ```
+
+## Tests
+
+60 offline unit tests pin the wire protocol (signing vectors — including the
+live-verified freeCrags key — URL building, search encoding), the JSON helpers,
+grade filtering, CSV export escaping, the map projection math, and the OSM tile
+darkening. No network needed; they run in ~150 ms:
+
+```
+dotnet test RockfaxApi.Tests/RockfaxApi.Tests.csproj
+```
+
+CI (GitHub Actions, windows-latest) builds the solution in Release, runs the
+unit tests as a hard gate, then runs the live-API self-test as a soft check.
