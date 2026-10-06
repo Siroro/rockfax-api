@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Globalization;
 using System.Text.Json;
 using RockfaxApi;
 
@@ -246,6 +247,7 @@ internal sealed class CragView : UserControl
         Color[] inks = { Ui.Green, Ui.Amber, Color.FromArgb(251, 146, 60), Ui.Red };
         for (int band = 0; band < 4; band++)
         {
+            if (_gradeCounts.Length > band && _gradeCounts[band] == 0) continue; // no noise chips for empty bands
             Color ink = inks[band];
             var chip = Ui.Chip($"{_gradeCounts[band]}  {labels[band]}",
                                _bandFilter == band ? Ui.Bg : ink,
@@ -304,9 +306,10 @@ internal sealed class CragView : UserControl
             foreach (JsonProperty day in area.EnumerateObject())
             {
                 if (day.Value.ValueKind != JsonValueKind.Object || !day.Value.TryGetProperty("dly", out JsonElement dly)) continue;
+                string raw = day.Name.Length > 2 ? day.Name[2..] : day.Name; // e.g. "Sa26-10-03" -> "26-10-03"
                 chips.Add(new WeatherChip
                 {
-                    Day = day.Name.Length > 2 ? day.Name[2..] : day.Name,
+                    Day = FormatDay(raw),
                     Temp = dly.Int("t"),
                     RainPct = dly.Int("cor"),
                     Wind = dly.Int("ws"),
@@ -317,6 +320,12 @@ internal sealed class CragView : UserControl
         }
         return chips;
     }
+
+    /// <summary>"26-10-03" -> "Sat 3 Oct" (or "Today"); falls back to the raw string.</summary>
+    private static string FormatDay(string raw)
+        => DateTime.TryParseExact(raw, "yy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dt)
+            ? dt.Date == DateTime.Today ? "Today" : dt.ToString("ddd d MMM", CultureInfo.InvariantCulture)
+            : raw;
 }
 
 /// <summary>One painted weather-day card.</summary>
@@ -327,7 +336,7 @@ internal sealed class WeatherChip : Control
 
     public WeatherChip()
     {
-        Size = new Size(88, 72);
+        Size = new Size(100, 72);
         BackColor = Ui.Card;
         Margin = new Padding(0, 0, 6, 0);
         DoubleBuffered = true;
@@ -359,7 +368,9 @@ internal sealed class WeatherChip : Control
         TextRenderer.DrawText(g, Day, Ui.BodyBold, new Point(10, 7), Ui.Accent);
         Color tempInk = Temp >= 18 ? Ui.Amber : Temp <= 4 ? Ui.Accent : Ui.Text;
         TextRenderer.DrawText(g, $"{Temp}°", Ui.MonoBig, new Point(8, 22), tempInk);
-        TextRenderer.DrawText(g, CodeText(Code), Ui.Tiny, new Point(10, 47), Ui.Muted);
-        TextRenderer.DrawText(g, $"rain {RainPct}%  wind {Wind}", Ui.Tiny, new Point(10, 58), RainPct >= 60 ? Ui.Accent : Ui.Muted);
+        TextRenderer.DrawText(g, $"{RainPct}% rain", Ui.Tiny, new Point(10, 47),
+            RainPct >= 60 ? Ui.Accent : Ui.Muted, TextFormatFlags.EndEllipsis);
+        TextRenderer.DrawText(g, $"{CodeText(Code)} · wind {Wind}", Ui.Tiny, new Point(10, 58),
+            Ui.Muted, TextFormatFlags.EndEllipsis);
     }
 }
