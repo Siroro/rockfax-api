@@ -118,7 +118,7 @@ internal sealed class LogbookView : UserControl
             foreach (ListViewItem item in _lvAscents.Items)
             {
                 string[] cols = item.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => s.Text).ToArray();
-string csv = string.Join(",", cols.Select(c => "" + c.Replace("", """") + ""));
+                string csv = string.Join(",", cols.Select(c => "\"" + c.Replace("\"", "\"\"") + "\""));
                 lines.Add(csv);
             }
             await File.WriteAllLinesAsync(dialog.FileName, lines);
