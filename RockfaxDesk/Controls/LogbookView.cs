@@ -53,7 +53,15 @@ internal sealed class LogbookView : UserControl
         _lvAscents.ColumnInk[2] = Ui.Amber;
         _lvAscents.ColumnInk[4] = Ui.Accent;
         _lvWishlist.Columns.Add("Route", 280);
-        _lvWishlist.Columns.Add("Crag", 240);
+        _lvWishlist.Columns.Add("Grade", 66);
+        _lvWishlist.Columns.Add("Crag", 200);
+        _lvWishlist.Columns.Add("UKC id", 76);
+        _lvWishlist.ColumnInk[1] = Ui.Amber;
+        _lvWishlist.DoubleClick += (_, _) =>
+        {
+            if (_lvWishlist.SelectedItems.Count > 0 && _lvWishlist.SelectedItems[0].Tag is RouteSummary r)
+                RouteRequested?.Invoke(r);
+        };
 
         _lvAscents.DoubleClick += (_, _) =>
         {
@@ -197,15 +205,22 @@ internal sealed class LogbookView : UserControl
         try
         {
             using JsonDocument doc = await api.GetWishlistAsync(api.UserId);
-            int count = 0;
+            int count = 0, deleted = 0;
             foreach (JsonElement entry in FindWishlist(doc.RootElement))
             {
+                if (entry.Int("trash") == 1) { deleted++; continue; }
                 var item = new ListViewItem(entry.Str("name"));
+                item.SubItems.Add(entry.Str("grade"));
                 item.SubItems.Add(entry.Str("crag"));
+                item.SubItems.Add(entry.Int("ukcID").ToString());
+                item.Tag = new RouteSummary(entry.Str("name"), entry.Str("grade"), "", 0,
+                                            entry.Str("crag"), entry.Int("ukcID"), entry.Int("rockfaxID"), 0);
                 _lvWishlist.Items.Add(item);
                 count++;
             }
-            _lblWishlist.Text = $"▍ WISHLIST ({count})";
+            _lblWishlist.Text = $"▍ WISHLIST ({count})" +
+                (deleted > 0 ? $" · {deleted} deleted skipped" : "") +
+                "  ·  double-click to open the route";
             _lvWishlist.StretchLastColumn();
         }
         catch
