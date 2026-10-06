@@ -55,14 +55,23 @@ internal static class Ui
 
     public static Button Button(string text, int width = 96, bool primary = false, bool danger = false)
     {
-        Color face = danger ? Color.FromArgb(70, 26, 30) : primary ? AccentDim : BtnFace;
-        Color hotFace = primary || danger ? Lighten(face, 12) : Panel;
-        Color ink = danger ? Red : primary ? Accent : Text;
-        return new UiButton(text, face, hotFace, ink)
+        var b = new Button
         {
+            Text = text,
             Width = width,
-            Height = 32,
+            Height = 30,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Panel,
+            ForeColor = danger ? Red : primary ? Accent : Text,
+            Font = BodyBold,
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 0, 8, 0),
+            TabStop = false,
         };
+        b.FlatAppearance.BorderSize = 0;
+        b.FlatAppearance.MouseOverBackColor = Lighten(Panel, 10);
+        b.FlatAppearance.MouseDownBackColor = Selection;
+        return b;
     }
 
     /// <summary>Borderless dark textbox wrapped in a 1px accent-on-focus border. Dock the returned panel.</summary>
@@ -76,56 +85,25 @@ internal static class Ui
         return tb;
     }
 
-    /// <summary>Rounded input well: dark fill, borderless at rest; a soft accent ring
-    /// appears only while the inner textbox holds focus. Wrap via Ui.Box.</summary>
-    internal sealed class InputWell : Panel
-    {
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public bool FocusedInner { get; set; }
-
-        public InputWell()
-        {
-            DoubleBuffered = true;
-            ResizeRedraw = true;
-            BackColor = Ui.Bg; // corners outside the rounded well show the host
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            Graphics g = e.Graphics;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using var path = Ui.RoundedPath(rect, Math.Min(9, rect.Height / 2));
-            using (var fill = new SolidBrush(Ui.Lighten(Ui.BgDeep, FocusedInner ? 6 : 0)))
-                g.FillPath(fill, path);
-            if (FocusedInner)
-            {
-                using var ring = new Pen(Ui.Accent, 1.75f);
-                g.DrawPath(ring, path);
-            }
-        }
-    }
-
     public static Panel Box(TextBox tb, int width, int height = 30, string? cue = null)
     {
         tb.BorderStyle = BorderStyle.None;
-        tb.BackColor = BgDeep;
+        tb.BackColor = Panel;
         tb.ForeColor = Text;
         tb.Font = Body;
         tb.Margin = Padding.Empty;
-        var well = new InputWell
+        Panel wrapper = new()
         {
             Width = width,
             Height = height,
+            BackColor = Panel, // a flat input strip like the list rows
             Margin = new Padding(0, 0, 10, 0),
         };
         tb.Dock = DockStyle.Fill;
-        well.Padding = new Padding(12, Math.Max(0, (height - tb.Height) / 2), 12, 0);
-        well.Controls.Add(tb);
-        tb.GotFocus += (_, _) => { well.FocusedInner = true; well.Invalidate(); };
-        tb.LostFocus += (_, _) => { well.FocusedInner = false; well.Invalidate(); };
+        wrapper.Padding = new Padding(8, Math.Max(0, (height - tb.Height) / 2), 8, 0);
+        wrapper.Controls.Add(tb);
         if (cue is not null) SendMessage(tb.Handle, 0x1501, 1, cue); // after handle (re)creation
-        return well;
+        return wrapper;
     }
 
     public static Label Label(string text, Color? color = null, Font? font = null, bool auto = true)
@@ -138,27 +116,23 @@ internal static class Ui
             Margin = new Padding(0, 0, 10, 0),
         };
 
-    /// <summary>Rounded rectangle path (clockwise from top-left); radius clamped to fit.</summary>
-    public static System.Drawing.Drawing2D.GraphicsPath RoundedPath(Rectangle r, int radius)
-    {
-        var path = new System.Drawing.Drawing2D.GraphicsPath();
-        int d = Math.Max(2, Math.Min(radius * 2, Math.Min(r.Width, r.Height))) ;
-        path.AddArc(r.X, r.Y, d, d, 270, 90);
-        path.AddArc(r.Right - d, r.Y, d, d, 0, 90);
-        path.AddArc(r.Right - d, r.Bottom - d, d, d, 90, 90);
-        path.AddArc(r.X, r.Bottom - d, d, d, 180, 90);
-        path.CloseFigure();
-        return path;
-    }
 
     /// <summary>Channels clamped upward — used for hover tints on painted controls.</summary>
     public static Color Lighten(Color c, int amount) => Color.FromArgb(
         Math.Min(c.R + amount, 255), Math.Min(c.G + amount, 255), Math.Min(c.B + amount, 255));
 
-    /// <summary>Rounded pill chip: border + centered bold text, subtle hover lightening
-    /// (set Cursor=Hand where clickable). Replaces the old flat Label chips.</summary>
-    public static UiChip Chip(string text, Color ink, Color? fill = null)
-        => new(text, ink, fill);
+    /// <summary>Flat text chip: colored bold text on a plain fill, no custom painting.</summary>
+    public static Label Chip(string text, Color ink, Color? fill = null)
+        => new()
+        {
+            Text = text,
+            AutoSize = true,
+            ForeColor = ink,
+            Font = BodyBold,
+            BackColor = fill ?? Panel,
+            Margin = new Padding(0, 0, 6, 0),
+            Padding = new Padding(8, 3, 8, 4),
+        };
 
     /// <summary>Sunken section header: small caps feel, accent tick before the text.</summary>
     public static Label SectionHeader(string text, int height = 30)
@@ -214,57 +188,6 @@ internal sealed class DarkMenuColors : ProfessionalColorTable
     public override Color SeparatorLight => Ui.Border;
 }
 
-/// <summary>Rounded tag chip on the app palette: soft fill + centered bold text, no
-/// border — the fill lift alone separates it from the page. Hover lightens; clickable
-/// callers set Cursor = Hand and wire Click.</summary>
-internal sealed class UiChip : Control
-{
-    private readonly Color _ink, _fill, _hotFill;
-    private bool _hot;
-
-    public UiChip(string text, Color ink, Color? fill = null)
-    {
-        Text = text;
-        Font = Ui.BodyBold;
-        _ink = ink;
-        _fill = fill ?? Ui.SurfaceSoft;
-        _hotFill = fill is null ? Ui.Panel : Ui.Lighten(_fill, 14);
-        BackColor = Ui.Bg; // every chip host sits on Bg; the pill paints itself
-        DoubleBuffered = true;
-        ResizeRedraw = true;
-        TabStop = false;
-        Margin = new Padding(0, 0, 6, 0);
-        Size = Measure();
-    }
-
-    private Size Measure()
-    {
-        Size text = TextRenderer.MeasureText(Text, Font);
-        return new Size(text.Width + 22, text.Height + 9);
-    }
-
-    protected override void OnTextChanged(EventArgs e)
-    {
-        base.OnTextChanged(e);
-        Size = Measure();
-        Invalidate();
-    }
-
-    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Invalidate(); }
-    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hot = false; Invalidate(); }
-
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        Graphics g = e.Graphics;
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = Ui.RoundedPath(rect, Math.Min(9, rect.Height / 2));
-        using (var brush = new SolidBrush(_hot ? _hotFill : _fill))
-            g.FillPath(brush, path);
-        TextRenderer.DrawText(g, Text, Font, rect, _ink,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-    }
-}
 
 /// <summary>
 /// Dark owner-drawn ListView: themed header band, alternating rows, accent selection,
@@ -504,51 +427,6 @@ internal sealed class UiList : ListView
     }
 }
 
-/// <summary>Rounded flat button, fully owner-painted (soft fill + centered bold text,
-/// borderless) with hot/pressed/disabled states. Keeps Button semantics (Click, PerformClick).</summary>
-internal sealed class UiButton : Button
-{
-    private readonly Color _face, _hotFace, _ink, _downFace, _dimFace;
-    private bool _hot, _pressed;
-
-    public UiButton(string text, Color face, Color hotFace, Color ink)
-    {
-        Text = text;
-        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
-                 | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-        _face = face;
-        _hotFace = hotFace;
-        _ink = ink;
-        _downFace = Ui.AccentDim;
-        _dimFace = Ui.Panel;
-        Font = Ui.BodyBold;
-        BackColor = Ui.Bg;
-        ForeColor = ink;
-        FlatStyle = FlatStyle.Flat; // keeps native focus/keyboard plumbing quiet
-        Cursor = Cursors.Hand;
-        Margin = new Padding(0, 0, 8, 0);
-        TabStop = false;
-    }
-
-    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Invalidate(); }
-    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hot = false; _pressed = false; Invalidate(); }
-    protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e); if (e.Button == MouseButtons.Left) { _pressed = true; Invalidate(); } }
-    protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); _pressed = false; Invalidate(); }
-    protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
-
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        Graphics g = e.Graphics;
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = Ui.RoundedPath(rect, Math.Min(9, rect.Height / 2));
-        Color face = !Enabled ? _dimFace : _pressed ? _downFace : _hot ? _hotFace : _face;
-        using (var brush = new SolidBrush(face))
-            g.FillPath(brush, path);
-        TextRenderer.DrawText(g, Text, Font, rect, Enabled ? _ink : Ui.Muted,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-    }
-}
 
 /// <summary>
 /// Custom tab strip + host: flat dark headers with an accent underline for the active

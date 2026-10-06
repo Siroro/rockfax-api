@@ -467,10 +467,7 @@ internal sealed class WeatherChip : Control
     {
         base.OnPaint(e);
         Graphics g = e.Graphics;
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        var card = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = Ui.RoundedPath(card, 9);
-        g.FillPath(CardFill, path); // fill lift only — no border stroke
+        g.FillRectangle(CardFill, ClientRectangle); // plain flat tile — no border, no rounding
 
         TextRenderer.DrawText(g, Day, Ui.BodyBold, new Point(10, 7), Ui.Accent);
         Color tempInk = Temp >= 18 ? Ui.Amber : Temp <= 4 ? Ui.Accent : Ui.Text;
