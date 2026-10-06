@@ -295,7 +295,7 @@ public sealed class MainForm : Form
         }
         catch { /* offline is fine; lists load on demand */ }
 
-        // Dev/screenshot hooks: --goto=N [--search=text] [--freecrags]
+        // Dev/screenshot hooks: --goto=N [--search=text] [--freecrags] [--crag=N] [--sort=col]
         string[] args = Program.StartupArgs;
         foreach (string arg in args)
         {
@@ -308,6 +308,9 @@ public sealed class MainForm : Form
         foreach (string arg in args)
             if (arg.StartsWith("--crag=", StringComparison.Ordinal) && int.TryParse(arg[7..], out int cragId))
                 await OpenCragAsync(cragId, "");
+        foreach (string arg in args)
+            if (arg.StartsWith("--sort=", StringComparison.Ordinal) && int.TryParse(arg[7..], out int sortCol))
+                _cragView.CycleSort(sortCol); // repeat the arg to cycle: asc → desc → grouped
         foreach (string arg in args)
             if (arg.StartsWith("--route=", StringComparison.Ordinal))
             {

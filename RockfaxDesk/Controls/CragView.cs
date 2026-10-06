@@ -29,6 +29,9 @@ internal sealed class CragView : UserControl
     private readonly List<int> _groupFirstItems = new();
     private ComboBox? _buttressJump;
     private int _bandFilter = -1; // -1 = all
+    private int _sortColumn = -1; // -1 = grouped by buttress; 0-4 = flat list sorted by that column
+    private bool _sortDesc;
+    private static readonly string[] RouteColumnNames = { "Route", "Grade", "Tech", "Stars", "UKC id" };
     private readonly FlowLayoutPanel _photos = RouteView.NewPhotoStrip();
     private readonly Label _lblStatus = Ui.Label("", Ui.Amber, Ui.Small);
 
@@ -60,6 +63,7 @@ internal sealed class CragView : UserControl
         _lvRoutes.Columns.Add("UKC id", 76);
         _lvRoutes.ColumnInk[1] = Ui.Amber;
         _lvRoutes.ColumnInk[3] = Ui.Green;
+        _lvRoutes.ColumnClick += (_, e) => CycleSort(e.Column);
         _lvRoutes.DoubleClick += async (_, _) =>
         {
             if (_lvRoutes.SelectedItems.Count > 0 && _lvRoutes.SelectedItems[0].Tag is RouteSummary r)
@@ -241,7 +245,7 @@ internal sealed class CragView : UserControl
             // photos are decoration; ignore failures
         }
         _lblStatus.Text = _lvRoutes.Items.Count > 0
-            ? $"{_lvRoutes.Items.Count} routes — double-click for route details" + (shown > 0 ? $"  ·  {shown} photos" : "")
+            ? $"{_lvRoutes.Items.Count} routes — double-click for details · click a column to sort" + (shown > 0 ? $"  ·  {shown} photos" : "")
             : "no routes listed";
     }
 
@@ -281,37 +285,119 @@ internal sealed class CragView : UserControl
         }
     }
 
+    /// <summary>Column-header click: ascending → descending → back to buttress grouping.</summary>
+    internal void CycleSort(int column)
+    {
+        if (column < 0 || column >= RouteColumnNames.Length) return;
+        if (_sortColumn != column) { _sortColumn = column; _sortDesc = false; }
+        else if (!_sortDesc) _sortDesc = true;
+        else { _sortColumn = -1; _sortDesc = false; } // third click restores the default view
+        UpdateColumnHeaders();
+        ApplyRouteFilter();
+    }
+
+    private void UpdateColumnHeaders()
+    {
+        for (int i = 0; i < _lvRoutes.Columns.Count && i < RouteColumnNames.Length; i++)
+            _lvRoutes.Columns[i].Text = i == _sortColumn
+                ? RouteColumnNames[i] + (_sortDesc ? " \u25bc" : " \u25b2")
+                : RouteColumnNames[i];
+    }
+
     private void ApplyRouteFilter()
     {
         _lvRoutes.BeginUpdate();
         _lvRoutes.Groups.Clear();
         _lvRoutes.Items.Clear();
-        var groups = new Dictionary<string, ListViewGroup>();
+        _groupFirstItems.Clear();
+        if (_buttressJump is not null) _buttressJump.Items.Clear();
+
+        var visible = new List<(RouteSummary Summary, string Buttress)>();
         foreach ((RouteSummary summary, string buttress, int band) in _allRoutes)
         {
             if (_bandFilter >= 0 && band != _bandFilter) continue;
-            string b = buttress.Length > 0 ? buttress : "General";
-            if (!groups.TryGetValue(b, out ListViewGroup? group))
-            {
-                group = new ListViewGroup(b);
-                groups[b] = group;
-                _lvRoutes.Groups.Add(group);
-            }
-            var item = new ListViewItem(summary.Name, group);
-            item.SubItems.Add(summary.Grade);
-            item.SubItems.Add(summary.TechGrade);
-            item.SubItems.Add(Jx.Stars(summary.Stars));
-            item.SubItems.Add(summary.UkcId.ToString());
-            item.Tag = summary;
-            _lvRoutes.Items.Add(item);
+            visible.Add((summary, buttress));
         }
-        _lvRoutes.ShowGroups = true;
+
+        if (_sortColumn >= 0)
+        {
+            _lvRoutes.ShowGroups = false;
+            visible.Sort((x, y) =>
+            {
+                int c = CompareRoutes(x.Summary, y.Summary, _sortColumn);
+                return _sortDesc ? -c : c;
+            });
+            foreach ((RouteSummary summary, _) in visible)
+                _lvRoutes.Items.Add(RouteItem(summary, null));
+        }
+        else
+        {
+            _lvRoutes.ShowGroups = true;
+            if (_buttressJump is not null) _buttressJump.Items.Add("jump to buttress\u2026");
+            var groups = new Dictionary<string, ListViewGroup>();
+            foreach ((RouteSummary summary, string buttress) in visible)
+            {
+                string b = buttress.Length > 0 ? buttress : "General";
+                if (!groups.TryGetValue(b, out ListViewGroup? group))
+                {
+                    group = new ListViewGroup(b);
+                    groups[b] = group;
+                    _lvRoutes.Groups.Add(group);
+                    _groupFirstItems.Add(_lvRoutes.Items.Count); // index this group's first item gets
+                    if (_buttressJump is not null) _buttressJump.Items.Add(b);
+                }
+                _lvRoutes.Items.Add(RouteItem(summary, group));
+            }
+            if (_groupFirstItems.Count > 1 && _buttressJump is not null) _buttressJump.SelectedIndex = 0;
+        }
+        if (_buttressJump is not null) _buttressJump.Visible = _groupFirstItems.Count > 1;
         _lvRoutes.EndUpdate();
+        _lvRoutes.StretchLastColumn();
         if (_bandFilter >= 0 && _allRoutes.Count > 0)
         {
             string[] labels = { "Mod-VD", "S-HS", "VS-HVS", "E1+" };
             _lblStatus.Text = $"{_lvRoutes.Items.Count} of {_allRoutes.Count} routes ({labels[_bandFilter]} band) — double-click for details";
         }
+    }
+
+    private static ListViewItem RouteItem(RouteSummary summary, ListViewGroup? group)
+    {
+        var item = group is null ? new ListViewItem(summary.Name) : new ListViewItem(summary.Name, group);
+        item.SubItems.Add(summary.Grade);
+        item.SubItems.Add(summary.TechGrade);
+        item.SubItems.Add(Jx.Stars(summary.Stars));
+        item.SubItems.Add(summary.UkcId.ToString());
+        item.Tag = summary;
+        return item;
+    }
+
+    /// <summary>Routes-table column order: name, grade (grade-aware), tech grade, stars, UKC id.</summary>
+    internal static int CompareRoutes(RouteSummary a, RouteSummary b, int column)
+    {
+        int c;
+        if (column == 0)
+            c = string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+        else if (column == 1)
+        {
+            c = GradeKey(a.Grade).CompareTo(GradeKey(b.Grade));
+            if (c == 0) c = string.Compare(a.Grade, b.Grade, StringComparison.OrdinalIgnoreCase);
+        }
+        else if (column == 2)
+            c = string.Compare(a.TechGrade, b.TechGrade, StringComparison.OrdinalIgnoreCase);
+        else if (column == 3)
+            c = a.Stars.CompareTo(b.Stars);
+        else
+            c = a.UkcId.CompareTo(b.UkcId);
+        if (c == 0 && column != 0)
+            c = string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase); // stable tie-break
+        return c;
+    }
+
+    /// <summary>Grade sort key: adjectival and E-grades rank below sport numbers; unparseable grades last.</summary>
+    internal static int GradeKey(string grade)
+    {
+        int rank = LogbookView.GradeRank(grade);
+        return rank < 0 ? int.MaxValue : rank;
     }
 
     internal static List<WeatherChip> FormatWeather(JsonDocument doc)

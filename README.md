@@ -195,8 +195,11 @@ drive it headlessly for captures):
   fall back to full images when the CDN lacks a t_300h variant). "on UKC" opens the
   crag on ukclimbing.com.
 - **Crag pages** — clickable grade-band chips (Mod-VD / S-HS / VS-HVS / E1+) that
-  filter the buttress-grouped route list, a seven-day weather card strip, crag
-  photos, and an "on UKC" link.
+  filter the buttress-grouped route list, a "jump to buttress" dropdown on
+  multi-buttress crags, and a sortable routes table: click a column header for
+  ascending, again for descending (▲/▼ shown), a third time to return to buttress
+  grouping; grades sort by difficulty (M → E-grades → sport), not alphabetically.
+  Plus a seven-day weather card strip, crag photos, and an "on UKC" link.
 - **Crag map** — every UKC crag plotted over a real **OpenStreetMap basemap**
   (standard OSM raster tiles, remapped to a dark slate so they fit the app;
   Web Mercator slippy-map projection with an LRU tile cache). Pannable and
