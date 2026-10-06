@@ -108,21 +108,23 @@ internal static class Ui
             Margin = new Padding(0, 0, 10, 0),
         };
 
-    /// <summary>Small rounded chip with an icon dot — used for grades, counts, legend.</summary>
-    public static Label Chip(string text, Color ink, Color? fill = null)
+    /// <summary>Rounded rectangle path (clockwise from top-left); radius clamped to fit.</summary>
+    public static System.Drawing.Drawing2D.GraphicsPath RoundedPath(Rectangle r, int radius)
     {
-        var l = new Label
-        {
-            Text = text,
-            AutoSize = true,
-            ForeColor = ink,
-            Font = BodyBold,
-            BackColor = fill ?? Card,
-            Margin = new Padding(0, 0, 6, 0),
-            Padding = new Padding(8, 3, 8, 4),
-        };
-        return l;
+        var path = new System.Drawing.Drawing2D.GraphicsPath();
+        int d = Math.Max(2, Math.Min(radius * 2, Math.Min(r.Width, r.Height))) ;
+        path.AddArc(r.X, r.Y, d, d, 270, 90);
+        path.AddArc(r.Right - d, r.Y, d, d, 0, 90);
+        path.AddArc(r.Right - d, r.Bottom - d, d, d, 90, 90);
+        path.AddArc(r.X, r.Bottom - d, d, d, 180, 90);
+        path.CloseFigure();
+        return path;
     }
+
+    /// <summary>Rounded pill chip: border + centered bold text, subtle hover lightening
+    /// (set Cursor=Hand where clickable). Replaces the old flat Label chips.</summary>
+    public static UiChip Chip(string text, Color ink, Color? fill = null)
+        => new(text, ink, fill);
 
     /// <summary>Sunken section header: small caps feel, accent tick before the text.</summary>
     public static Label SectionHeader(string text, int height = 30)
@@ -176,6 +178,64 @@ internal sealed class DarkMenuColors : ProfessionalColorTable
     public override Color MenuItemPressedGradientEnd => Ui.Panel;
     public override Color SeparatorDark => Ui.Border;
     public override Color SeparatorLight => Ui.Border;
+}
+
+/// <summary>Rounded pill chip on the app palette: 1px border, centered bold text,
+/// hover lightening. Clickable callers set Cursor = Hand and wire Click.</summary>
+internal sealed class UiChip : Control
+{
+    private readonly Color _ink, _fill, _line, _hotFill, _hotLine;
+    private bool _hot;
+
+    public UiChip(string text, Color ink, Color? fill = null, Color? line = null)
+    {
+        Text = text;
+        Font = Ui.BodyBold;
+        _ink = ink;
+        _fill = fill ?? Ui.Card;
+        _line = line ?? Ui.Border;
+        _hotFill = Lighten(_fill, 14);
+        _hotLine = Lighten(_line, 26);
+        BackColor = Ui.Bg; // every chip host sits on Bg; the pill paints itself
+        DoubleBuffered = true;
+        ResizeRedraw = true;
+        TabStop = false;
+        Margin = new Padding(0, 0, 6, 0);
+        Size = PreferredSize();
+    }
+
+    private static Color Lighten(Color c, int amount) => Color.FromArgb(
+        Math.Min(c.R + amount, 255), Math.Min(c.G + amount, 255), Math.Min(c.B + amount, 255));
+
+    private Size PreferredSize()
+    {
+        Size text = TextRenderer.MeasureText(Text, Font);
+        return new Size(text.Width + 22, text.Height + 9);
+    }
+
+    protected override void OnTextChanged(EventArgs e)
+    {
+        base.OnTextChanged(e);
+        Size = PreferredSize();
+        Invalidate();
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Invalidate(); }
+    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hot = false; Invalidate(); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        Graphics g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        using var path = Ui.RoundedPath(rect, Math.Min(9, rect.Height / 2));
+        using (var brush = new SolidBrush(_hot ? _hotFill : _fill))
+            g.FillPath(brush, path);
+        using (var pen = new Pen(_hot ? _hotLine : _line))
+            g.DrawPath(pen, path);
+        TextRenderer.DrawText(g, Text, Font, rect, _ink,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+    }
 }
 
 /// <summary>

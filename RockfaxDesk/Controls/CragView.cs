@@ -43,6 +43,7 @@ internal sealed class CragView : UserControl
 
     public CragView()
     {
+        DoubleBuffered = true;
         BackColor = Ui.Bg;
 
         _empty = new Label
@@ -434,15 +435,19 @@ internal sealed class CragView : UserControl
 /// <summary>One painted weather-day card.</summary>
 internal sealed class WeatherChip : Control
 {
+    private static readonly SolidBrush CardFill = new(Ui.Card);
+    private static readonly Pen CardBorder = new(Ui.Border);
+
     public string Day = "";
     public int Temp, RainPct, Wind, Code;
 
     public WeatherChip()
     {
         Size = new Size(100, 72);
-        BackColor = Ui.Card;
+        BackColor = Ui.Bg; // corners outside the rounded card show the page
         Margin = new Padding(0, 0, 6, 0);
         DoubleBuffered = true;
+        ResizeRedraw = true;
     }
 
     private static string CodeText(int wc)
@@ -464,16 +469,17 @@ internal sealed class WeatherChip : Control
         base.OnPaint(e);
         Graphics g = e.Graphics;
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        g.Clear(Ui.Card);
-        using var border = new Pen(Ui.Border);
-        g.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
+        var card = new Rectangle(0, 0, Width - 1, Height - 1);
+        using var path = Ui.RoundedPath(card, 9);
+        g.FillPath(CardFill, path);
+        g.DrawPath(CardBorder, path);
 
         TextRenderer.DrawText(g, Day, Ui.BodyBold, new Point(10, 7), Ui.Accent);
         Color tempInk = Temp >= 18 ? Ui.Amber : Temp <= 4 ? Ui.Accent : Ui.Text;
-        TextRenderer.DrawText(g, $"{Temp}°", Ui.MonoBig, new Point(8, 22), tempInk);
+        TextRenderer.DrawText(g, $"{Temp}\u00b0", Ui.MonoBig, new Point(8, 22), tempInk);
         TextRenderer.DrawText(g, $"{RainPct}% rain", Ui.Tiny, new Point(10, 47),
             RainPct >= 60 ? Ui.Accent : Ui.Muted, TextFormatFlags.EndEllipsis);
-        TextRenderer.DrawText(g, $"{CodeText(Code)} · wind {Wind}", Ui.Tiny, new Point(10, 58),
+        TextRenderer.DrawText(g, $"{CodeText(Code)} \u00b7 wind {Wind}", Ui.Tiny, new Point(10, 58),
             Ui.Muted, TextFormatFlags.EndEllipsis);
     }
 }

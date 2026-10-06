@@ -31,6 +31,7 @@ internal sealed class PhotoDialog : Form
         Size = new Size(940, 760);
         MinimizeBox = false;
         KeyPreview = true;
+        DoubleBuffered = true;
         BackColor = Ui.BgDeep;
 
         var prev = Ui.Button("\u2039", 40);

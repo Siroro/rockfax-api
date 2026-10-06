@@ -58,6 +58,7 @@ internal sealed class RouteView : UserControl
 
     public RouteView()
     {
+        DoubleBuffered = true;
         BackColor = Ui.Bg;
 
         _empty = new Label

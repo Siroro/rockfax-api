@@ -58,6 +58,7 @@ internal sealed class LogbookView : UserControl
 
     public LogbookView()
     {
+        DoubleBuffered = true;
         BackColor = Ui.Bg;
 
         _lvAscents.Columns.Add("Date", 92);

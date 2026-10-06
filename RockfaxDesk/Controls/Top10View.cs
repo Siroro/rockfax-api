@@ -23,6 +23,7 @@ internal sealed class Top10View : UserControl
     public Top10View()
     {
         BackColor = Ui.Bg;
+        DoubleBuffered = true;
         ThemeScrollbars();
         var titleRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = Ui.Bg, Padding = new Padding(10, 4, 10, 0) };
         var refresh = Ui.Button("Refresh", 84);

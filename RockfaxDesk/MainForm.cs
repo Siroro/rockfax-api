@@ -22,7 +22,13 @@ public sealed class MainForm : Form
     private readonly Button _btnLogin;
     private readonly Button _btnLogbook;
     private Button _btnHelp = new();
-    private readonly ToolTip _tips = new();
+    // Owner-drawn so the bubbles match the dark theme instead of the system light yellow.
+    private readonly ToolTip _tips = new()
+    {
+        OwnerDraw = true,
+        BackColor = Ui.BgDeep,
+        ForeColor = Ui.Text,
+    };
     private const string BaseTitle = "Rockfax Explorer — unofficial UKClimbing client";
 
     // ---- navigation history + cross-session recents -----------------------------
@@ -103,6 +109,7 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
+        DoubleBuffered = true;
         Text = BaseTitle;
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(1160, 720);
@@ -131,6 +138,13 @@ public sealed class MainForm : Form
         _tips.SetToolTip(_btnFreeCrags, "Rockfax free-sample crags (amber on the map)");
         _tips.SetToolTip(_btnTop10, "the week's top-ten photos");
         _tips.SetToolTip(_btnLogin, "sign in with your own UKClimbing account");
+        _tips.Draw += (_, e) =>
+        {
+            e.DrawBackground(); // fills BackColor
+            using var border = new Pen(Ui.Border);
+            e.Graphics.DrawRectangle(border, 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
+            e.DrawText(); // ForeColor + standard padding
+        };
         _tips.SetToolTip(_btnLogbook, "your ascents + wishlist (Ctrl+4)");
         _tips.SetToolTip(_btnHelp, "about & shortcuts (F1)");
 
