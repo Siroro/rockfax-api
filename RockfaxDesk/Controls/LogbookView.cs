@@ -18,25 +18,36 @@ internal sealed class LogbookView : UserControl
 
     public event Action<RouteSummary>? RouteRequested;
 
-    private readonly List<ListViewItem> _allAscents = new();
+    private readonly List<(ListViewItem Item, List<int> Pids)> _allAscents = new();
     private readonly Dictionary<int, string> _partnerNames = new();
+    private ComboBox? _partnerJump;
+    private readonly List<int> _jumpPids = new();
+    private int? _partnerFilterPid;
 
     private void ApplyFilter()
     {
         string q = _filter.Text.Trim();
         _lvAscents.BeginUpdate();
         _lvAscents.Items.Clear();
-        foreach (ListViewItem item in _allAscents)
+        int shown = 0;
+        foreach ((ListViewItem item, List<int> pids) in _allAscents)
         {
+            if (_partnerFilterPid is int pid && !pids.Contains(pid)) continue;
             if (q.Length == 0
                 || item.Text.Contains(q, StringComparison.OrdinalIgnoreCase)
                 || item.SubItems.Count > 1 && item.SubItems[1].Text.Contains(q, StringComparison.OrdinalIgnoreCase)
                 || item.SubItems.Count > 3 && item.SubItems[3].Text.Contains(q, StringComparison.OrdinalIgnoreCase))
             {
                 _lvAscents.Items.Add(item);
+                shown++;
             }
         }
         _lvAscents.EndUpdate();
+        if (_partnerFilterPid is int active)
+        {
+            string name = _partnerNames.TryGetValue(active, out string? n) ? n : $"#{active}";
+            _lblStatus.Text = $"{shown} ascents with {name}";
+        }
     }
 
     public LogbookView()
@@ -74,6 +85,24 @@ internal sealed class LogbookView : UserControl
         export.Dock = DockStyle.Right;
         export.Click += async (_, _) => await ExportCsvAsync();
         titleRow.Controls.Add(export);
+        _partnerJump = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Ui.BgDeep,
+            ForeColor = Ui.Text,
+            Font = Ui.Small,
+            Width = 180,
+            Visible = false,
+        };
+        _partnerJump.SelectedIndexChanged += (_, _) =>
+        {
+            int idx = _partnerJump.SelectedIndex;
+            _partnerFilterPid = idx > 0 && idx - 1 < _jumpPids.Count ? _jumpPids[idx - 1] : null;
+            ApplyFilter();
+        };
+        // Added before the filter box so it docks to its right (last-added docks first).
+        titleRow.Controls.Add(_partnerJump);
         _filterBox = Ui.Box(_filter, 230, 30, cue: "filter ascents…");
         _filterBox.Dock = DockStyle.Left;
         _filterBox.Visible = false;
@@ -151,6 +180,8 @@ internal sealed class LogbookView : UserControl
         _lblStatus.Text = $"loading logbook for {api.Username}…";
         _allAscents.Clear();
         _partnerNames.Clear();
+        _jumpPids.Clear();
+        _partnerFilterPid = null;
         _lvAscents.Items.Clear();
         _lvWishlist.Items.Clear();
 
@@ -179,7 +210,8 @@ internal sealed class LogbookView : UserControl
             foreach (JsonElement ascent in FindAscents(doc.RootElement))
             {
                 if (ascent.Int("trash") == 1) { deleted++; continue; }
-                string partners = string.Join(", ", ascent.IntList("partners").Select(pid =>
+                List<int> pids = ascent.IntList("partners");
+                string partners = string.Join(", ", pids.Select(pid =>
                     _partnerNames.TryGetValue(pid, out string? name) ? name : $"#{pid}"));
                 var item = new ListViewItem(ascent.Str("textAscentDate"));
                 item.SubItems.Add(ascent.Str("name"));
@@ -190,8 +222,23 @@ internal sealed class LogbookView : UserControl
                 item.SubItems.Add(ascent.Str("comment"));
                 item.Tag = new RouteSummary(ascent.Str("name"), ascent.Str("grade"), "", 0, ascent.Str("crag"),
                                             ascent.Int("ukcID"), ascent.Int("rockfaxID"), 0);
-                _allAscents.Add(item);
+                _allAscents.Add((item, pids));
                 total++;
+            }
+            // Partner dropdown: only partners that appear on at least one ascent, sorted.
+            if (_partnerJump is { } jump)
+            {
+                _jumpPids.Clear();
+                jump.Items.Clear();
+                jump.Items.Add("all partners…");
+                foreach (int pid in _allAscents.SelectMany(a => a.Pids).Distinct().OrderBy(pid =>
+                             _partnerNames.TryGetValue(pid, out string? n) ? n : $"#{pid}", StringComparer.OrdinalIgnoreCase))
+                {
+                    _jumpPids.Add(pid);
+                    jump.Items.Add(_partnerNames.TryGetValue(pid, out string? n) ? n : $"#{pid}");
+                }
+                jump.SelectedIndex = _jumpPids.Count > 0 ? 0 : -1;
+                jump.Visible = _jumpPids.Count > 0;
             }
             ApplyFilter();
             _lblStatus.Text = $"{total} ascents" + (deleted > 0 ? $"  ·  {deleted} deleted entries skipped" : "") + "  ·  double-click to open the route";
