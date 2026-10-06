@@ -268,6 +268,20 @@ public sealed class MainForm : Form
         var subtitle = Ui.Label("unofficial UKClimbing client", Ui.Muted, Ui.Tiny);
         subtitle.Location = new Point(244, 22);
 
+        var help = Ui.Button("?", 30);
+        help.Click += (_, _) =>
+            MessageBox.Show(
+                "Rockfax Explorer \u2014 unofficial UKClimbing client\n\n" +
+                "Reverse engineered from the Rockfax Android app for personal interoperability.\n" +
+                "Not affiliated with Rockfax or UKClimbing; use your own account and keep request volume sane.\n\n" +
+                "Shortcuts:\n" +
+                "  Ctrl+F  focus search\n" +
+                "  Enter   search / open selection\n" +
+                "  Esc     clear the search box\n" +
+                "  F5      refresh current route/crag/list\n" +
+                "  Map:    drag = pan \u00b7 wheel or +/- = zoom \u00b7 click a dot = open crag\n" +
+                "  Photos: \u2190/\u2192 or wheel = previous/next \u00b7 click = close",
+                "About Rockfax Explorer", MessageBoxButtons.OK, MessageBoxIcon.Information);
         // Auth cluster hugs the right edge. FlowDirection.RightToLeft places the first
         // child at the right edge and flows leftward, so add in reverse visual order.
         var auth = new FlowLayoutPanel
@@ -279,6 +293,7 @@ public sealed class MainForm : Form
             Padding = new Padding(0, 12, 0, 0),
             WrapContents = false,
         };
+        auth.Controls.Add(help);
         auth.Controls.Add(_btnLogbook);
         auth.Controls.Add(_lblUser);
         auth.Controls.Add(_btnLogin);

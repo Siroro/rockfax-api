@@ -53,6 +53,7 @@ internal sealed class PhotoDialog : Form
             if (e.KeyCode == Keys.Escape) Close();
         };
         _box.Click += (_, _) => Close();
+        MouseWheel += (_, e) => Step(e.Delta > 0 ? -1 : 1);
 
         Load += async (_, _) => await LoadPhoto();
     }

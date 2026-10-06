@@ -12,8 +12,29 @@ internal sealed class LogbookView : UserControl
     private readonly Label _lblStatus = Ui.Label("log in to load your logbook", Ui.Muted, Ui.Small);
     private readonly Label _lblWishlist = Ui.SectionHeader("WISHLIST", 26);
     private readonly SplitContainer _split;
+    private readonly TextBox _filter = new();
 
     public event Action<RouteSummary>? RouteRequested;
+
+    private readonly List<ListViewItem> _allAscents = new();
+
+    private void ApplyFilter()
+    {
+        string q = _filter.Text.Trim();
+        _lvAscents.BeginUpdate();
+        _lvAscents.Items.Clear();
+        foreach (ListViewItem item in _allAscents)
+        {
+            if (q.Length == 0
+                || item.Text.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || item.SubItems.Count > 1 && item.SubItems[1].Text.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || item.SubItems.Count > 3 && item.SubItems[3].Text.Contains(q, StringComparison.OrdinalIgnoreCase))
+            {
+                _lvAscents.Items.Add(item);
+            }
+        }
+        _lvAscents.EndUpdate();
+    }
 
     public LogbookView()
     {
@@ -36,7 +57,11 @@ internal sealed class LogbookView : UserControl
                 RouteRequested?.Invoke(r);
         };
 
-        var titleRow = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = Ui.Bg, Padding = new Padding(10, 4, 0, 0) };
+        var titleRow = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Ui.Bg, Padding = new Padding(10, 6, 10, 0) };
+        var filterBox = Ui.Box(_filter, 230, 30, cue: "filter ascents…");
+        filterBox.Dock = DockStyle.Left;
+        _filter.TextChanged += (_, _) => ApplyFilter();
+        titleRow.Controls.Add(filterBox);
         titleRow.Controls.Add(Ui.Label("YOUR LOGBOOK", Ui.Text, Ui.H2));
 
         _split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, BackColor = Ui.Bg, SplitterWidth = 5 };
@@ -79,6 +104,7 @@ internal sealed class LogbookView : UserControl
         }
 
         _lblStatus.Text = $"loading logbook for {api.Username}…";
+        _allAscents.Clear();
         _lvAscents.Items.Clear();
         _lvWishlist.Items.Clear();
         try
@@ -96,9 +122,10 @@ internal sealed class LogbookView : UserControl
                 item.SubItems.Add(ascent.Str("comment"));
                 item.Tag = new RouteSummary(ascent.Str("name"), ascent.Str("grade"), "", 0, ascent.Str("crag"),
                                             ascent.Int("ukcID"), ascent.Int("rockfaxID"), 0);
-                _lvAscents.Items.Add(item);
+                _allAscents.Add(item);
                 total++;
             }
+            ApplyFilter();
             _lblStatus.Text = $"{total} ascents" + (deleted > 0 ? $"  ·  {deleted} deleted entries skipped" : "") + "  ·  double-click to open the route";
             _lvAscents.StretchLastColumn();
         }
