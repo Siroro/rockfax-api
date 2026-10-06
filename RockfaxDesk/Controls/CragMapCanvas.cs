@@ -183,7 +183,9 @@ internal sealed class CragMapCanvas : Control
             string label = p.Free ? $"★ {p.Title}  ·  {p.NRoutes} routes  ·  free sample"
                                   : $"{p.Title}  ·  {p.NRoutes} routes";
             SizeF size = TextRenderer.MeasureText(label, Ui.BodyBold);
-            var box = new Rectangle((int)x + 12, (int)y - 11, (int)size.Width + 12, (int)size.Height + 6);
+            int lx = Math.Min((int)x + 12, Width - (int)size.Width - 18);
+            int ly = Math.Min(Math.Max((int)y - 11, 4), Height - (int)size.Height - 10);
+            var box = new Rectangle(lx, ly, (int)size.Width + 12, (int)size.Height + 6);
             using (var back = new SolidBrush(Color.FromArgb(216, 10, 16, 30)))
                 g.FillRectangle(back, box);
             using (var edge = new Pen(strong ? Ui.Accent : Ui.Border))

@@ -309,6 +309,10 @@ public sealed class MainForm : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         SaveWindowState();
+        _spinTimer.Dispose();
+        _searchDebounce.Dispose();
+        _images.Dispose();
+        _api.Dispose();
         base.OnFormClosing(e);
     }
 

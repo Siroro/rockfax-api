@@ -21,31 +21,50 @@ internal sealed class ImageFetcher : IDisposable
     };
 
     private readonly Dictionary<int, Image> _thumbCache = new();
+    private readonly Dictionary<int, Task<Image?>> _inFlight = new();
     private readonly Queue<int> _thumbOrder = new();
     private const int CacheCap = 240;
 
     public async Task<Image?> GetThumbAsync(int photoId)
     {
+        Task<Image?>? inFlight;
         lock (_thumbCache)
         {
             if (_thumbCache.TryGetValue(photoId, out Image? cached)) return cached;
-        }
-
-        Image? image = await LoadAsync(ThumbBase + photoId + ".jpg").ConfigureAwait(false)
-                       ?? await LoadAsync(FullBase + photoId + ".jpg", downscaleTo: 300).ConfigureAwait(false);
-        if (image is null) return null;
-
-        lock (_thumbCache)
-        {
-            if (_thumbCache.Count >= CacheCap && _thumbOrder.Count > 0)
+            _inFlight.TryGetValue(photoId, out inFlight);
+            if (inFlight is null)
             {
-                int evict = _thumbOrder.Dequeue();
-                if (_thumbCache.Remove(evict, out Image? old)) old.Dispose();
+                inFlight = LoadThumbAsync(photoId);
+                _inFlight[photoId] = inFlight;
             }
-            _thumbCache[photoId] = image;
-            _thumbOrder.Enqueue(photoId);
         }
-        return image;
+        return await inFlight.ConfigureAwait(false);
+    }
+
+    private async Task<Image?> LoadThumbAsync(int photoId)
+    {
+        try
+        {
+            Image? image = await LoadAsync(ThumbBase + photoId + ".jpg").ConfigureAwait(false)
+                           ?? await LoadAsync(FullBase + photoId + ".jpg", downscaleTo: 300).ConfigureAwait(false);
+            if (image is null) return null;
+
+            lock (_thumbCache)
+            {
+                if (_thumbCache.Count >= CacheCap && _thumbOrder.Count > 0)
+                {
+                    int evict = _thumbOrder.Dequeue();
+                    if (_thumbCache.Remove(evict, out Image? old)) old.Dispose();
+                }
+                _thumbCache[photoId] = image;
+                _thumbOrder.Enqueue(photoId);
+            }
+            return image;
+        }
+        finally
+        {
+            lock (_thumbCache) { _inFlight.Remove(photoId); }
+        }
     }
 
     public Task<Image?> GetFullAsync(int photoId)
