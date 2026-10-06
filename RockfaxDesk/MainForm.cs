@@ -33,9 +33,7 @@ public sealed class MainForm : Form
 
     // ---- navigation history + cross-session recents -----------------------------
     private readonly SessionState _session = SessionStore.Load();
-    private readonly List<NavEntry> _navBack = [];
-    private readonly List<NavEntry> _navForward = [];
-    private NavEntry? _current;
+    private readonly NavHistory _nav = new();
     private Button _btnBack = new();
     private Button _btnForward = new();
 
@@ -416,6 +414,8 @@ public sealed class MainForm : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         SaveWindowState();
+        _openCts?.Cancel();
+        _openCts?.Dispose();
         _spinTimer.Dispose();
         _searchDebounce.Dispose();
         _images.Dispose();
@@ -661,13 +661,26 @@ public sealed class MainForm : Form
     private RouteSummary? _lastRoute;
     private (int Id, string Name)? _lastCrag;
 
+    /// <summary>Cancels the page-load in flight so rapid back/forward clicks can't race:
+    /// whichever open started last is the only one allowed to paint.</summary>
+    private CancellationTokenSource? _openCts;
+
+    private CancellationToken BeginOpen()
+    {
+        _openCts?.Cancel();
+        _openCts?.Dispose();
+        _openCts = new CancellationTokenSource();
+        return _openCts.Token;
+    }
+
     private async Task OpenRouteAsync(RouteSummary route, bool navigate = true)
     {
         _lastRoute = route;
         _tabs.Select(0);
         Text = $"{route.Name} — Rockfax Explorer";
-        await _routeView.ShowRouteAsync(route);
-        if (navigate) RecordNav(new NavEntry(NavEntry.KindRoute, route.UkcId, route.Name));
+        CancellationToken ct = BeginOpen();
+        await _routeView.ShowRouteAsync(route, ct);
+        if (navigate) RecordNav(new NavEntry(NavEntry.KindRoute, route.UkcId, route.Name, route));
         _lblStatus.Text = $"route: {route.Name}";
     }
 
@@ -677,7 +690,8 @@ public sealed class MainForm : Form
         _tabs.Select(1);
         Text = name.Length > 0 ? $"{name} — Rockfax Explorer" : BaseTitle;
         _map.SelectCrag(ukcCragId); // ring the dot on the map too
-        await _cragView.ShowCragAsync(ukcCragId, name);
+        CancellationToken ct = BeginOpen();
+        await _cragView.ShowCragAsync(ukcCragId, name, ct);
         if (navigate)
         {
             CragPoint? p = _cragPoints.FirstOrDefault(x => x.UkcId == ukcCragId);
@@ -687,20 +701,14 @@ public sealed class MainForm : Form
     }
 
     /// <summary>Records an open as the new navigation position and remembers it for
-    /// future sessions. Opening the same page again is a no-op (F5-style refresh).</summary>
+    /// future sessions. Opening the same page again keeps the position (F5-style refresh).</summary>
     private void RecordNav(NavEntry entry)
     {
-        bool samePage = _current is { } cur && cur.Kind == entry.Kind && cur.UkcId == entry.UkcId;
-        if (!samePage)
-        {
-            if (_current is { } previous) _navBack.Add(previous);
-            _navForward.Clear();
-        }
-        _current = entry;
+        _nav.Push(entry);
         SessionStore.PushRecent(entry.Kind == NavEntry.KindRoute ? _session.RecentRoutes : _session.RecentCrags, entry);
         SessionStore.Save(_session);
         UpdateNavButtons();
-        if (!_navTipShown && _navBack.Count == 1)
+        if (!_navTipShown && _nav.BackStack.Count == 1)
         {
             _navTipShown = true;
             _lblStatus.Text = "tip: Alt+← / → — or your mouse's side buttons — navigate back and forward";
@@ -711,18 +719,15 @@ public sealed class MainForm : Form
 
     private void UpdateNavButtons()
     {
-        _btnBack.Enabled = _navBack.Count > 0;
-        _btnForward.Enabled = _navForward.Count > 0;
+        _btnBack.Enabled = _nav.CanBack;
+        _btnForward.Enabled = _nav.CanForward;
     }
 
     private async Task GoBackAsync()
     {
-        if (_navBack.Count == 0) return;
-        NavEntry entry = _navBack[^1];
-        _navBack.RemoveAt(_navBack.Count - 1);
-        if (_current is { } cur) _navForward.Insert(0, cur);
-        _current = entry;
+        if (_nav.Back() is not { } entry) return;
         UpdateNavButtons();
+        _lblStatus.Text = $"\u2190 back: {entry.Name}";
         await OpenEntryAsync(entry);
     }
 
@@ -743,26 +748,23 @@ public sealed class MainForm : Form
 
     private async Task GoForwardAsync()
     {
-        if (_navForward.Count == 0) return;
-        NavEntry entry = _navForward[0];
-        _navForward.RemoveAt(0);
-        if (_current is { } cur) _navBack.Add(cur);
-        _current = entry;
+        if (_nav.Forward() is not { } entry) return;
         UpdateNavButtons();
+        _lblStatus.Text = $"\u2192 forward: {entry.Name}";
         await OpenEntryAsync(entry);
     }
 
     private Task OpenEntryAsync(NavEntry entry)
         => entry.Kind == NavEntry.KindRoute
-            ? OpenRouteAsync(new RouteSummary(entry.Name, "", "", 0, "", entry.UkcId, 0, 0), navigate: false)
+            ? OpenRouteAsync(entry.RouteOrFallback(), navigate: false)
             : OpenCragAsync(entry.UkcId, entry.Name, navigate: false);
 
     private Task ReloadCurrentAsync()
         => RunAsync("refreshing", async () =>
         {
             if (_busy > 1) { _lblStatus.Text = "busy — wait for the current request"; return; }
-            if (_tabs.SelectedIndex == 0 && _lastRoute is not null) { await _routeView.ShowRouteAsync(_lastRoute); _lblStatus.Text = $"route: {_lastRoute.Name}"; }
-            else if (_tabs.SelectedIndex == 1 && _lastCrag is not null) { await _cragView.ShowCragAsync(_lastCrag.Value.Id, _lastCrag.Value.Name); _lblStatus.Text = $"crag: {_lastCrag.Value.Name}"; }
+            if (_tabs.SelectedIndex == 0 && _lastRoute is not null) { await _routeView.ShowRouteAsync(_lastRoute, BeginOpen()); _lblStatus.Text = $"route: {_lastRoute.Name}"; }
+            else if (_tabs.SelectedIndex == 1 && _lastCrag is not null) { await _cragView.ShowCragAsync(_lastCrag.Value.Id, _lastCrag.Value.Name, BeginOpen()); _lblStatus.Text = $"crag: {_lastCrag.Value.Name}"; }
             else if (_tabs.SelectedIndex == 4) { await _top10View.LoadAsync(); }
             else if (_tabs.SelectedIndex == 5) { await _servicesView.LoadAsync(force: true); }
             else if (_tabs.SelectedIndex == 3 && _api.IsLoggedIn) { await _logbookView.LoadAsync(_api); }
@@ -902,7 +904,7 @@ public sealed class MainForm : Form
         var items = new List<(ListViewItem Item, string Key)>();
         foreach (NavEntry entry in _session.RecentRoutes.Take(10))
         {
-            var item = new ListViewItem(entry.Name) { Tag = new RouteSummary(entry.Name, "", "", 0, "", entry.UkcId, 0, 0) };
+            var item = new ListViewItem(entry.Name) { Tag = entry.RouteOrFallback() };
             item.SubItems.Add("");
             item.SubItems.Add("route");
             items.Add((item, $"r{entry.UkcId}"));

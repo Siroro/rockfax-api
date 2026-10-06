@@ -140,7 +140,9 @@ internal sealed class RouteView : UserControl
         _images = images;
     }
 
-    public async Task ShowRouteAsync(RouteSummary route)
+    /// <summary>Loads every section. The token cancels a superseded load (e.g. rapid
+    /// back/forward): each phase bails before touching the UI once cancellation fires.</summary>
+    public async Task ShowRouteAsync(RouteSummary route, CancellationToken ct = default)
     {
         if (_api is null || _images is null) return;
         Tag = route;
@@ -149,16 +151,17 @@ internal sealed class RouteView : UserControl
 
         _lblTitle.Text = route.Name;
         BuildChips(route);
-        _lnkCrag.Text = route.CragName.Length > 0 ? $"▸ {route.CragName}" : "crag n/a";
+        _lnkCrag.Text = route.CragName.Length > 0 ? $"\u25b8 {route.CragName}" : "crag n/a";
         _txtDescription.Clear();
         _lvComments.Items.Clear();
         ClearPhotos();
         _lblPhotoNote.Text = "";
-        _lblStatus.Text = "loading route…";
+        _lblStatus.Text = "loading route\u2026";
 
         try
         {
-            RouteInfo info = await _api.GetRouteInfoAsync(route.UkcId);
+            RouteInfo info = await _api.GetRouteInfoAsync(route.UkcId, ct);
+            if (ct.IsCancellationRequested) return;
             var meta = new List<string>();
             if (info.FirstAscent.Length > 0)
                 meta.Add($"First ascent: {info.FirstAscent} {info.FirstAscentDate}".TrimEnd());
@@ -169,6 +172,7 @@ internal sealed class RouteView : UserControl
                 (info.Description.Length > 0 ? info.Description + "\r\n" : "(no description on UKC)\r\n") +
                 (info.RockfaxDescription.Length > 0 ? "\r\n— Rockfax —\r\n" + info.RockfaxDescription : "");
         }
+        catch (OperationCanceledException) { return; }
         catch (Exception ex)
         {
             _txtDescription.Text = "description unavailable: " + ex.Message;
@@ -177,7 +181,8 @@ internal sealed class RouteView : UserControl
         _lblStatus.Text = "loading comments…";
         try
         {
-            using JsonDocument doc = await _api.GetRouteCommentsAsync(new[] { route.UkcId });
+            using JsonDocument doc = await _api.GetRouteCommentsAsync(new[] { route.UkcId }, site: default, ct);
+            if (ct.IsCancellationRequested) return;
             var comments = ParseComments(doc).ToList();
             foreach ((string who, string date, string text) in comments)
             {
@@ -200,9 +205,11 @@ internal sealed class RouteView : UserControl
         int shown = 0;
         try
         {
-            using JsonDocument doc = await _api.GetRoutePhotosAsync(new[] { route.UkcId });
+            using JsonDocument doc = await _api.GetRoutePhotosAsync(new[] { route.UkcId }, site: default, ct);
+            if (ct.IsCancellationRequested) return;
             foreach ((int id, string title, string author) in ParsePhotos(doc))
             {
+                if (ct.IsCancellationRequested) return;
                 Image? thumb = await _images.GetThumbAsync(id);
                 if (thumb is null) continue;
                 _photos.Controls.Add(PhotoCard(_images, id, title, author, thumb));

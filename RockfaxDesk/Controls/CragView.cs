@@ -218,7 +218,9 @@ internal sealed class CragView : UserControl
         _images = images;
     }
 
-    public async Task ShowCragAsync(int ukcCragId, string knownTitle)
+    /// <summary>Loads every section. The token cancels a superseded load (e.g. rapid
+    /// back/forward): each phase bails before touching the UI once cancellation fires.</summary>
+    public async Task ShowCragAsync(int ukcCragId, string knownTitle, CancellationToken ct = default)
     {
         if (_api is null || _images is null) return;
         _empty.Visible = false;
@@ -251,7 +253,8 @@ internal sealed class CragView : UserControl
 
         try
         {
-            using JsonDocument doc = await _api.GetCragRoutesAsync(ukcCragId);
+            using JsonDocument doc = await _api.GetCragRoutesAsync(ukcCragId, ct);
+            if (ct.IsCancellationRequested) return;
             JsonElement root = doc.RootElement;
 
             // Response shape: { "routes": [ {name, grade, ukcID, buttress, ...} ],
@@ -309,7 +312,8 @@ internal sealed class CragView : UserControl
 
         try
         {
-            using JsonDocument doc = await _api.GetWeatherAsync(new[] { ukcCragId }, RockfaxApi.Site.UkClimbing);
+            using JsonDocument doc = await _api.GetWeatherAsync(new[] { ukcCragId }, RockfaxApi.Site.UkClimbing, ct);
+            if (ct.IsCancellationRequested) return;
             foreach (WeatherChip chip in FormatWeather(doc))
             {
                 if (chip.Hourly is { Length: > 0 } hours) _tips.SetToolTip(chip, hours);
@@ -325,7 +329,8 @@ internal sealed class CragView : UserControl
         // Crag description / access / guidebooks / parking / crag comments.
         try
         {
-            using JsonDocument doc = await _api.GetCragDetailsAsync(new[] { ukcCragId }, RockfaxApi.Site.UkClimbing);
+            using JsonDocument doc = await _api.GetCragDetailsAsync(new[] { ukcCragId }, RockfaxApi.Site.UkClimbing, ct);
+            if (ct.IsCancellationRequested) return;
             ShowInfo(ParseCragInfo(doc));
         }
         catch (Exception ex)
@@ -340,9 +345,11 @@ internal sealed class CragView : UserControl
         int shown = 0;
         try
         {
-            using JsonDocument doc = await _api.GetCragPhotosAsync(new[] { ukcCragId }, RockfaxApi.Site.UkClimbing);
+            using JsonDocument doc = await _api.GetCragPhotosAsync(new[] { ukcCragId }, RockfaxApi.Site.UkClimbing, ct: ct);
+            if (ct.IsCancellationRequested) return;
             foreach ((int id, string title, string author) in RouteView.ParsePhotos(doc))
             {
+                if (ct.IsCancellationRequested) return;
                 Image? thumb = await _images.GetThumbAsync(id);
                 if (thumb is null) continue;
                 _photos.Controls.Add(RouteView.PhotoCard(_images, id, title, author, thumb));

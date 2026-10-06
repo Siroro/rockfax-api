@@ -231,7 +231,12 @@ drive it headlessly for captures):
   About box lists attribution + shortcuts.
 - **Back / forward** — every route or crag you open pushes onto a navigation stack:
   toolbar arrows, **Alt+←/→**, or your **mouse's side buttons** walk back and forward
-  through them (the photo viewer steps with its side buttons too).
+  through them. History entries
+  carry the full route summary, so going back restores the page exactly — grade /
+  tech / star chips and the "open crag" link included — and rapid back/forward
+  clicks cancel the superseded load, so the view always settles on the page you
+  last asked for. Same-page re-opens refresh in place instead of stacking
+  duplicates.
 - **Ctrl+Tab** cycles tabs.
 - **Recents** — routes and crags you open are remembered (newest first, capped at 20,
   stored only in `%LOCALAPPDATA%\RockfaxDesk\session.json`); on the next launch the
