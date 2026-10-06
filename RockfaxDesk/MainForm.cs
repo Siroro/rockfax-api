@@ -58,6 +58,7 @@ public sealed class MainForm : Form
         Text = "",
     };
     private readonly System.Windows.Forms.Timer _spinTimer = new() { Interval = 110 };
+    private readonly System.Windows.Forms.Timer _searchDebounce = new() { Interval = 450 };
     private int _busy;
     private int _spinFrame;
 
@@ -145,6 +146,13 @@ public sealed class MainForm : Form
         };
         _spinTimer.Start();
 
+        // Live search: fire 450ms after the last keystroke (Enter still works).
+        _searchDebounce.Tick += (_, _) =>
+        {
+            _searchDebounce.Stop();
+            if (_txtSearch.Text.Trim().Length >= 3) _ = SearchAsync(_txtSearch.Text);
+        };
+
         // ---- events ------------------------------------------------------------
         _btnLogin.Click += async (_, _) => await LoginAsync();
         _btnLogbook.Click += async (_, _) => { _tabs.Select(3); await _logbookView.LoadAsync(_api); };
@@ -154,9 +162,14 @@ public sealed class MainForm : Form
         _btnTop10.Click += async (_, _) => { _tabs.Select(4); await _top10View.LoadAsync(); };
         _lvLeft.DoubleClick += (_, _) => _ = LeftItemActivated();
         _lvLeft.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) { await LeftItemActivated(); } };
+        _txtSearch.TextChanged += (_, _) =>
+        {
+            _searchDebounce.Stop();
+            if (_txtSearch.Text.Trim().Length >= 3) _searchDebounce.Start();
+        };
         _txtSearch.KeyDown += async (_, e) =>
         {
-            if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(_txtSearch.Text); }
+            if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; _searchDebounce.Stop(); await SearchAsync(_txtSearch.Text); }
             if (e.KeyCode == Keys.Escape) { _txtSearch.Clear(); }
         };
         _txtCragFilter.KeyDown += async (_, e) =>
