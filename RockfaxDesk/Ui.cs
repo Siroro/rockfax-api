@@ -148,19 +148,40 @@ internal static class DarkScroll
     [System.Runtime.InteropServices.DllImport("uxtheme.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
     private static extern int SetWindowTheme(IntPtr hWnd, string? subAppName, string? subIdList);
 
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string? cls, string? win);
+
     /// <summary>Applies the DarkMode_Explorer scrollbar theme once a handle exists.</summary>
     public static void Apply(Control control)
     {
-        control.HandleCreated += (_, _) =>
+        control.HandleCreated += (_, _) => ApplyNow(control.Handle);
+        if (control.IsHandleCreated) ApplyNow(control.Handle);
+    }
+
+    /// <summary>Darks the native header child of a ListView — its beyond-last-section
+    /// corner otherwise paints light and shows as a white box next to the scrollbar.
+    /// Deferred a loop turn: the SysHeader32 child doesn't exist inside HandleCreated.</summary>
+    public static void ApplyHeader(Control list)
+    {
+        void go()
         {
-            if (OperatingSystem.IsWindowsVersionAtLeast(10))
+            if (!list.IsHandleCreated) return;
+            try
             {
-                try { SetWindowTheme(control.Handle, "DarkMode_Explorer", null); } catch { /* best effort */ }
+                IntPtr header = FindWindowEx(list.Handle, IntPtr.Zero, "SysHeader32", null);
+                if (header != IntPtr.Zero) ApplyNow(header);
             }
-        };
-        if (control.IsHandleCreated && OperatingSystem.IsWindowsVersionAtLeast(10))
+            catch { /* best effort */ }
+        }
+        list.HandleCreated += (_, _) => list.BeginInvoke(go);
+        if (list.IsHandleCreated) list.BeginInvoke(go);
+    }
+
+    private static void ApplyNow(IntPtr handle)
+    {
+        if (OperatingSystem.IsWindowsVersionAtLeast(10))
         {
-            try { SetWindowTheme(control.Handle, "DarkMode_Explorer", null); } catch { /* best effort */ }
+            try { SetWindowTheme(handle, "DarkMode_Explorer", null); } catch { /* best effort */ }
         }
     }
 }
@@ -194,6 +215,7 @@ internal sealed class UiList : ListView
         DrawSubItem += DrawSubItemRow;
         Resize += (_, _) => StretchLastColumn();
         DarkScroll.Apply(this);
+        DarkScroll.ApplyHeader(this);
         ColumnClick += OnColumnClicked;
     }
 
@@ -251,17 +273,16 @@ internal sealed class UiList : ListView
         }
     }
 
-    /// <summary>Stretches the last column so the header band has no unpainted gap,
-    /// reserving room for the vertical scrollbar when the list will scroll.</summary>
+    /// <summary>Sizes the last column to exactly the remaining client width. Call after
+    /// populating: ClientSize then already excludes the vertical scrollbar, so sections
+    /// meet it exactly — no unpainted header corner, no horizontal scrollbar.
+    /// (Native -2 autosize runs past the client edge on owner-drawn grouped lists.)</summary>
     public void StretchLastColumn()
     {
         if (Columns.Count == 0) return;
         int others = 0;
         for (int i = 0; i < Columns.Count - 1; i++) others += Columns[i].Width;
-        bool willScrollVertically = !VirtualMode && Items.Count > 0 &&
-                                    Items.Count * 22 > ClientSize.Height;
-        int reserved = willScrollVertically ? SystemInformation.VerticalScrollBarWidth : 0;
-        Columns[^1].Width = Math.Max(60, ClientSize.Width - others - reserved - 2);
+        Columns[^1].Width = Math.Max(60, ClientSize.Width - others);
     }
 
     private static void DrawHeader(object? sender, DrawListViewColumnHeaderEventArgs e)

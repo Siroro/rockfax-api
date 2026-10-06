@@ -158,9 +158,13 @@ internal sealed class RouteView : UserControl
         try
         {
             RouteInfo info = await _api.GetRouteInfoAsync(route.UkcId);
+            var meta = new List<string>();
+            if (info.FirstAscent.Length > 0)
+                meta.Add($"First ascent: {info.FirstAscent} {info.FirstAscentDate}".TrimEnd());
+            if (info.Height > 0) meta.Add($"Height: {info.Height} m");
+            if (info.Pitches > 0) meta.Add($"Pitches: {info.Pitches}");
             _txtDescription.Text =
-                $"First ascent: {info.FirstAscent} {info.FirstAscentDate}\r\n" +
-                $"Height: {info.Height} m    Pitches: {info.Pitches}\r\n\r\n" +
+                (meta.Count > 0 ? string.Join("    ", meta) + "\r\n\r\n" : "") +
                 (info.Description.Length > 0 ? info.Description + "\r\n" : "(no description on UKC)\r\n") +
                 (info.RockfaxDescription.Length > 0 ? "\r\n— Rockfax —\r\n" + info.RockfaxDescription : "");
         }
@@ -173,16 +177,17 @@ internal sealed class RouteView : UserControl
         try
         {
             using JsonDocument doc = await _api.GetRouteCommentsAsync(new[] { route.UkcId });
-            foreach ((string who, string date, string text) in ParseComments(doc))
+            var comments = ParseComments(doc).ToList();
+            foreach ((string who, string date, string text) in comments)
             {
                 var item = new ListViewItem(date) { UseItemStyleForSubItems = false };
                 item.SubItems.Add(who);
                 item.SubItems.Add(text);
                 _lvComments.Items.Add(item);
             }
-            if (_lvComments.Items.Count == 0)
+            if (comments.Count == 0)
                 _lvComments.Items.Add(new ListViewItem("—") { SubItems = { "", "no comments yet" } });
-            _commentsHeader.Text = $"▍ COMMENTS ({_lvComments.Items.Count})";
+            _commentsHeader.Text = $"▍ COMMENTS ({comments.Count})";
             _lvComments.StretchLastColumn();
         }
         catch (Exception ex)

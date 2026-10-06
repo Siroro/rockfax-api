@@ -35,6 +35,9 @@ public sealed class MainForm : Form
     private readonly UiList _lvLeft = new() { VirtualMode = true };
     private readonly Label _lblLeftHeader = Ui.Label("results", Ui.Muted, Ui.BodyBold);
     private readonly Label _lblLeftCount = Ui.Label("", Ui.Muted, Ui.Tiny);
+    private readonly Label _lblLeftEmpty = Ui.Label(
+        "nothing loaded yet\n\nCtrl+F searches routes ·\nAll crags browses the\nwhole map · Free crags\nlists Rockfax samples",
+        Ui.Muted, Ui.Body, auto: false);
     private readonly List<ListViewItem> _leftItems = new();
     private List<CragPoint> _cragPoints = new();
 
@@ -241,6 +244,14 @@ public sealed class MainForm : Form
         foreach (string arg in args)
             if (arg.StartsWith("--crag=", StringComparison.Ordinal) && int.TryParse(arg[7..], out int cragId))
                 await OpenCragAsync(cragId, "");
+        foreach (string arg in args)
+            if (arg.StartsWith("--route=", StringComparison.Ordinal))
+            {
+                string[] parts = arg[8..].Split(':', 2);
+                if (int.TryParse(parts[0], out int routeId))
+                    await OpenRouteAsync(new RouteSummary(
+                        parts.Length > 1 ? parts[1] : $"route {routeId}", "", "", 0, "", routeId, 0, 0));
+            }
         if (args.Contains("--top10")) { _tabs.Select(4); await _top10View.LoadAsync(); }
         // (hooks above are used by the screenshot harness: shot.ps1)
 
@@ -409,6 +420,10 @@ public sealed class MainForm : Form
         _lblLeftCount.Height = 20;
         _lblLeftCount.BackColor = Ui.BgDeep;
         _lblLeftCount.Padding = new Padding(4, 2, 0, 0);
+        _lblLeftEmpty.Dock = DockStyle.Fill;
+        _lblLeftEmpty.BackColor = Ui.BgDeep;
+        _lblLeftEmpty.Padding = new Padding(8, 14, 4, 0);
+        listHost.Controls.Add(_lblLeftEmpty); // in front of the list; hidden once items exist
         listHost.Controls.Add(_lvLeft);
         listHost.Controls.Add(_lblLeftCount);
         listHost.Controls.Add(_lblLeftHeader);
@@ -492,6 +507,8 @@ public sealed class MainForm : Form
         _lvLeft.VirtualListSize = _leftItems.Count;
         _lblLeftHeader.Text = header;
         _lblLeftCount.Text = count;
+        _lblLeftEmpty.Visible = _leftItems.Count == 0;
+        _lvLeft.StretchLastColumn(); // scrollbar appearing/changing alters client width
     }
 
     // ---- actions ----------------------------------------------------------
