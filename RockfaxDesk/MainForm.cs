@@ -166,6 +166,7 @@ public sealed class MainForm : Form
         _logbookView.RouteRequested += r => _ = OpenRouteAsync(r);
         _map.CragSelected += p => _ = OpenCragAsync(p.UkcId, p.Title);
         _tabs.Selected += i => { if (i == 5) _ = _servicesView.LoadAsync(); };
+        _tabs.UserSelected += RecordTabNav; // tab switches are navigation too
 
         // ---- structure ---------------------------------------------------------
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Ui.Bg, ColumnCount = 1, RowCount = 4 };
@@ -195,11 +196,11 @@ public sealed class MainForm : Form
 
         // ---- events ------------------------------------------------------------
         _btnLogin.Click += async (_, _) => await LoginAsync();
-        _btnLogbook.Click += async (_, _) => { _tabs.Select(3); await _logbookView.LoadAsync(_api); };
+        _btnLogbook.Click += async (_, _) => { _tabs.Select(3, user: true); await _logbookView.LoadAsync(_api); };
         _btnSearch.Click += async (_, _) => await SearchAsync(_txtSearch.Text);
         _btnAllCrags.Click += async (_, _) => await LoadAllCragsAsync();
         _btnFreeCrags.Click += async (_, _) => await LoadFreeCragsAsync();
-        _btnTop10.Click += async (_, _) => { _tabs.Select(4); await _top10View.LoadAsync(); };
+        _btnTop10.Click += async (_, _) => { _tabs.Select(4, user: true); await _top10View.LoadAsync(); };
         _lvLeft.DoubleClick += (_, _) => _ = LeftItemActivated();
         _lvLeft.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) { await LeftItemActivated(); } };
         _lvLeft.MouseUp += (_, e) =>
@@ -250,7 +251,7 @@ public sealed class MainForm : Form
             if (e.Control && e.KeyCode == Keys.F) { _txtSearch.Focus(); e.Handled = true; }
             if (e.Control && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D6)
             {
-                _tabs.Select(e.KeyCode - Keys.D1);
+                _tabs.Select(e.KeyCode - Keys.D1, user: true);
                 e.Handled = true;
             }
             if (e.Alt && e.KeyCode == Keys.Left) { _ = GoBackAsync(); e.Handled = true; }
@@ -258,7 +259,7 @@ public sealed class MainForm : Form
             if (e.Control && e.KeyCode == Keys.Tab)
             {
                 int next = (_tabs.SelectedIndex + (e.Shift ? 5 : 1)) % 6;
-                _tabs.Select(next);
+                _tabs.Select(next, user: true);
                 e.Handled = true;
             }
             if (e.KeyCode == Keys.F5) { await ReloadCurrentAsync(); e.Handled = true; }
@@ -334,6 +335,9 @@ public sealed class MainForm : Form
                     await OpenRouteAsync(new RouteSummary(
                         parts.Length > 1 ? parts[1] : $"route {routeId}", "", "", 0, "", routeId, 0, 0));
             }
+        foreach (string arg in args)
+            if (arg.StartsWith("--tab=", StringComparison.Ordinal) && int.TryParse(arg[6..], out int tabIdx))
+                _tabs.Select(tabIdx, user: true); // screenshot harness: a user-style tab switch
         if (args.Contains("--back")) await GoBackAsync();
         if (args.Contains("--forward")) await GoForwardAsync();
         if (_leftItems.Count == 0) ShowRecents(); // pick up where the last session left off
@@ -675,6 +679,7 @@ public sealed class MainForm : Form
 
     private async Task OpenRouteAsync(RouteSummary route, bool navigate = true)
     {
+        if (navigate && _tabs.SelectedIndex == 2) RecordLeavingMap(); // back returns to the map view you left
         _lastRoute = route;
         _tabs.Select(0);
         Text = $"{route.Name} — Rockfax Explorer";
@@ -686,6 +691,7 @@ public sealed class MainForm : Form
 
     private async Task OpenCragAsync(int ukcCragId, string name, bool navigate = true)
     {
+        if (navigate && _tabs.SelectedIndex == 2) RecordLeavingMap(); // back returns to the map view you left
         _lastCrag = (ukcCragId, name);
         _tabs.Select(1);
         Text = name.Length > 0 ? $"{name} — Rockfax Explorer" : BaseTitle;
@@ -705,14 +711,49 @@ public sealed class MainForm : Form
     private void RecordNav(NavEntry entry)
     {
         _nav.Push(entry);
-        SessionStore.PushRecent(entry.Kind == NavEntry.KindRoute ? _session.RecentRoutes : _session.RecentCrags, entry);
-        SessionStore.Save(_session);
+        if (entry.Kind != NavEntry.KindTab) // recents are routes & crags only
+        {
+            SessionStore.PushRecent(entry.Kind == NavEntry.KindRoute ? _session.RecentRoutes : _session.RecentCrags, entry);
+            SessionStore.Save(_session);
+        }
         UpdateNavButtons();
         if (!_navTipShown && _nav.BackStack.Count == 1)
         {
             _navTipShown = true;
             _lblStatus.Text = "tip: Alt+← / → — or your mouse's side buttons — navigate back and forward";
         }
+    }
+
+    private static readonly string[] TabTitles = { "ROUTE", "CRAG", "CRAG MAP", "LOGBOOK", "TOP 10", "SERVICES" };
+
+    /// <summary>A user tab switch is a navigation step. Route/crag tabs capture the page
+    /// they were showing; the map tab captures its zoom/centre so back restores the view.</summary>
+    private void RecordTabNav(int tab)
+    {
+        if (tab < 0 || tab >= TabTitles.Length) return;
+        switch (tab)
+        {
+            case 0 when _lastRoute is { } route:
+                RecordNav(new NavEntry(NavEntry.KindTab, route.UkcId, TabTitles[0], route) { Tab = 0 });
+                return;
+            case 1 when _lastCrag is { } crag:
+                RecordNav(new NavEntry(NavEntry.KindTab, crag.Id, crag.Name.Length > 0 ? crag.Name : TabTitles[1]) { Tab = 1 });
+                return;
+            case 2:
+                RecordLeavingMap();
+                return;
+            default:
+                RecordNav(new NavEntry(NavEntry.KindTab, tab, TabTitles[tab]) { Tab = tab });
+                return;
+        }
+    }
+
+    /// <summary>Records the map tab with its current zoom/centre — used when the user
+    /// switches to the map tab and when a map-dot click navigates away from it.</summary>
+    private void RecordLeavingMap()
+    {
+        (float zoom, float lat, float lng) = _map.GetView();
+        RecordNav(new NavEntry(NavEntry.KindTab, 2, TabTitles[2]) { Tab = 2, MapZoom = zoom, MapLat = lat, MapLng = lng });
     }
 
     private bool _navTipShown;
@@ -754,10 +795,75 @@ public sealed class MainForm : Form
         await OpenEntryAsync(entry);
     }
 
-    private Task OpenEntryAsync(NavEntry entry)
-        => entry.Kind == NavEntry.KindRoute
-            ? OpenRouteAsync(entry.RouteOrFallback(), navigate: false)
-            : OpenCragAsync(entry.UkcId, entry.Name, navigate: false);
+    private async Task OpenEntryAsync(NavEntry entry)
+    {
+        switch (entry.Kind)
+        {
+            case NavEntry.KindRoute:
+                // already on screen? just re-select the tab — no refetch, no flicker
+                if (_routeView.CurrentRouteId == entry.UkcId && entry.UkcId != 0)
+                {
+                    _tabs.Select(0);
+                    _lblStatus.Text = $"route: {entry.Name}";
+                    break;
+                }
+                await OpenRouteAsync(entry.RouteOrFallback(), navigate: false);
+                break;
+            case NavEntry.KindCrag:
+                if (_cragView.CurrentCragId == entry.UkcId && entry.UkcId != 0)
+                {
+                    _tabs.Select(1);
+                    _map.SelectCrag(entry.UkcId);
+                    _lblStatus.Text = $"crag: {entry.Name}";
+                    break;
+                }
+                await OpenCragAsync(entry.UkcId, entry.Name, navigate: false);
+                break;
+            default:
+                await OpenTabEntryAsync(entry);
+                break;
+        }
+    }
+
+    /// <summary>Restores a plain tab view: re-select the tab and whatever state it had,
+    /// re-fetching only when the tab has never loaded its content this session.</summary>
+    private async Task OpenTabEntryAsync(NavEntry entry)
+    {
+        switch (entry.Tab)
+        {
+            case 0: // route tab: restore the route it showed, cheap if still on screen
+                if (entry.Route is { } route) await OpenRouteAsync(route, navigate: false);
+                else if (_lastRoute is not null && _routeView.CurrentRouteId == _lastRoute.UkcId) _tabs.Select(0);
+                else if (_lastRoute is not null) await OpenRouteAsync(_lastRoute, navigate: false);
+                else _tabs.Select(0);
+                break;
+            case 1: // crag tab
+                if (entry.UkcId > 0 && _cragView.CurrentCragId != entry.UkcId) await OpenCragAsync(entry.UkcId, entry.Name, navigate: false);
+                else if (entry.UkcId > 0) _tabs.Select(1);
+                else _tabs.Select(1);
+                break;
+            case 2: // map: restore the zoom/centre captured when the entry was recorded
+                _tabs.Select(2);
+                if (entry.HasMapView && _cragPoints.Count > 0) _map.ApplyView(entry.MapZoom, entry.MapLat, entry.MapLng);
+                break;
+            case 3: // logbook
+                _tabs.Select(3);
+                if (_api.IsLoggedIn && !_logbookView.Loaded) await _logbookView.LoadAsync(_api);
+                break;
+            case 4: // top 10
+                _tabs.Select(4);
+                if (!_top10View.HasContent) await _top10View.LoadAsync();
+                break;
+            case 5: // services (LoadAsync without force reuses the per-run cache)
+                _tabs.Select(5);
+                await _servicesView.LoadAsync();
+                break;
+            default:
+                _tabs.Select(entry.Tab);
+                break;
+        }
+        if (entry.Tab >= 0 && entry.Tab < TabTitles.Length) _lblStatus.Text = $"tab: {TabTitles[entry.Tab]}";
+    }
 
     private Task ReloadCurrentAsync()
         => RunAsync("refreshing", async () =>
@@ -927,7 +1033,7 @@ public sealed class MainForm : Form
         if (crag.Lat == 0 && crag.Lng == 0) // e.g. a recent-entry crag with no stored coordinates
             crag = _cragPoints.FirstOrDefault(x => x.UkcId == crag.UkcId) ?? crag;
         if (crag.Lat == 0 && crag.Lng == 0) { _lblStatus.Text = "crag location unknown — open its page instead"; return; }
-        _tabs.Select(2);
+        _tabs.Select(2, user: true);
         _map.CenterOn(crag.Lat, crag.Lng, 11f);
         _map.SelectCrag(crag.UkcId);
         _lblStatus.Text = $"map centred on {crag.Title}";

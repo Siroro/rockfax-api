@@ -212,6 +212,10 @@ internal sealed class CragView : UserControl
         _content.Visible = false;
     }
 
+    /// <summary>The crag this view is showing (0 before the first load) — lets history
+    /// re-select the tab without re-fetching a page that is already on screen.</summary>
+    public int CurrentCragId { get; private set; }
+
     public void Bind(RockfaxClient api, ImageFetcher images)
     {
         _api = api;
@@ -223,6 +227,7 @@ internal sealed class CragView : UserControl
     public async Task ShowCragAsync(int ukcCragId, string knownTitle, CancellationToken ct = default)
     {
         if (_api is null || _images is null) return;
+        CurrentCragId = ukcCragId;
         _empty.Visible = false;
         _content.Visible = true;
 

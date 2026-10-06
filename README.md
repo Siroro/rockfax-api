@@ -229,9 +229,12 @@ drive it headlessly for captures):
   window/splitter/map geometry and your last search persist across runs, right-click
   menus on every list (open · show on map · open on UKC · copy link), and a "?"
   About box lists attribution + shortcuts.
-- **Back / forward** — every route or crag you open pushes onto a navigation stack:
-  toolbar arrows, **Alt+←/→**, or your **mouse's side buttons** walk back and forward
-  through them. History entries
+- **Back / forward** — every route, crag, or tab view you visit pushes onto a
+  navigation stack: toolbar arrows, **Alt+←/→**, or your **mouse's side buttons**
+  walk back and forward through them. Tab switches (Ctrl+1–6, Ctrl+Tab, clicking a
+  tab) are traced too — the map tab captures its zoom/centre, so going back returns
+  to the exact view, and clicking a map dot records the map before opening the crag.
+  Pages still on screen restore instantly without refetching. History entries
   carry the full route summary, so going back restores the page exactly — grade /
   tech / star chips and the "open crag" link included — and rapid back/forward
   clicks cancel the superseded load, so the view always settles on the page you

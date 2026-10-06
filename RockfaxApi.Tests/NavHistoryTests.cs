@@ -120,6 +120,33 @@ public class NavHistoryTests
     }
 
     [Fact]
+    public void Tab_entries_are_history_steps_and_dedupe_per_tab()
+    {
+        var nav = new NavHistory();
+        nav.Push(Route(1, "A"));
+        nav.Push(new NavEntry(NavEntry.KindTab, 2, "CRAG MAP") { Tab = 2, MapZoom = 11.5f, MapLat = 53.35f, MapLng = -1.63f });
+        nav.Push(new NavEntry(NavEntry.KindTab, 2, "CRAG MAP") { Tab = 2, MapZoom = 12f, MapLat = 53.4f, MapLng = -1.6f }); // same tab again: refresh
+        nav.Push(Crag(104, "Stanage Popular"));
+
+        Assert.Equal(2, nav.BackStack.Count); // route A, then one map entry (not two)
+        NavEntry map = nav.Back()!;
+        Assert.Equal(NavEntry.KindTab, map.Kind);
+        Assert.True(map.HasMapView);
+        Assert.Equal(12f, map.MapZoom);       // the richer view won
+        Assert.Equal(53.4f, map.MapLat);
+        NavEntry route = nav.Back()!;
+        Assert.Equal(NavEntry.KindRoute, route.Kind);
+        Assert.False(nav.CanBack);
+    }
+
+    [Fact]
+    public void Map_entries_without_a_view_do_not_claim_one()
+    {
+        var e = new NavEntry(NavEntry.KindTab, 5, "SERVICES") { Tab = 5 };
+        Assert.False(e.HasMapView);
+    }
+
+    [Fact]
     public void Older_session_files_without_a_payload_still_load()
     {
         const string oldJson = """{"RecentRoutes":[{"Kind":0,"UkcId":42,"Name":"Legacy"}],"RecentCrags":[]}""";

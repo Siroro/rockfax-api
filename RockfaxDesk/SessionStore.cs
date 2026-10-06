@@ -2,13 +2,18 @@ using System.Text.Json;
 
 namespace RockfaxDesk;
 
-/// <summary>A place the user navigated to: a UKC route (Kind 0) or crag (Kind 1).
-/// Route entries carry the full summary when it was known, so back/forward restores
-/// grade/tech/star chips and the "open crag" link instead of a bare id.</summary>
-internal sealed record NavEntry(int Kind, int UkcId, string Name, RouteSummary? Route = null)
+/// <summary>A place the user navigated to: a UKC route (Kind 0), a crag (Kind 1) or a
+/// plain tab view (Kind 2 — UkcId then carries the tab index). Route entries carry the
+/// full summary when it was known, so back/forward restores grade/tech/star chips and
+/// the "open crag" link instead of a bare id; map-tab entries carry the map view.</summary>
+internal sealed record NavEntry(int Kind, int UkcId, string Name, RouteSummary? Route = null,
+                                int Tab = -1, float MapZoom = 0, float MapLat = 0, float MapLng = 0)
 {
     public const int KindRoute = 0;
     public const int KindCrag = 1;
+    public const int KindTab = 2;
+
+    public bool HasMapView => MapZoom > 0;
 
     /// <summary>The summary to open this entry with — the stored payload when present.</summary>
     public RouteSummary RouteOrFallback() => Route ?? new RouteSummary(Name, "", "", 0, "", UkcId, 0, 0);

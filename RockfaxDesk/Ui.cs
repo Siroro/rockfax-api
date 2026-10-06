@@ -444,6 +444,10 @@ internal sealed class TabStrip : Panel
 
     public event Action<int>? Selected;
 
+    /// <summary>Raised only for user-initiated selections (tab click / hotkey), so
+    /// navigation history can trace tab switches without recording programmatic ones.</summary>
+    public event Action<int>? UserSelected;
+
     public TabStrip()
     {
         Dock = DockStyle.Fill;
@@ -474,7 +478,7 @@ internal sealed class TabStrip : Panel
         };
         b.FlatAppearance.BorderSize = 0;
         b.FlatAppearance.MouseOverBackColor = Ui.Panel;
-        b.Click += (_, _) => Select(index);
+        b.Click += (_, _) => Select(index, user: true);
         _strip.Controls.Add(b);
         _tabs.Add((b, content));
         if (_selected < 0) Select(0);
@@ -482,9 +486,10 @@ internal sealed class TabStrip : Panel
 
     public int SelectedIndex => _selected;
 
-    public void Select(int index)
+    public void Select(int index, bool user = false)
     {
-        if (index < 0 || index >= _tabs.Count || index == _selected) { if (index != _selected) Selected?.Invoke(index); return; }
+        if (index is < 0 || index >= _tabs.Count || index == _selected) return;
+        if (user) UserSelected?.Invoke(index); // before state changes: same-tab clicks never reach here
         _selected = index;
         for (int i = 0; i < _tabs.Count; i++)
         {

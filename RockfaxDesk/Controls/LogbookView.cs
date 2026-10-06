@@ -24,6 +24,9 @@ internal sealed class LogbookView : UserControl
 
     public event Action<RouteSummary>? RouteRequested;
 
+    /// <summary>True once a load completed (an empty logbook counts as loaded).</summary>
+    public bool Loaded { get; private set; }
+
     private readonly List<(ListViewItem Item, List<int> Pids)> _allAscents = new();
     private readonly Dictionary<int, string> _partnerNames = new();
     private ComboBox? _partnerJump;
@@ -333,6 +336,7 @@ internal sealed class LogbookView : UserControl
             _lblStatus.Text = $"{total} ascents" + (deleted > 0 ? $"  ·  {deleted} deleted entries skipped" : "") + "  ·  double-click to open the route";
             _lvAscents.StretchLastColumn();
             UpdateStats();
+            Loaded = true;
         }
         catch (Exception ex)
         {

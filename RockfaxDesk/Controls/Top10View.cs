@@ -39,6 +39,9 @@ internal sealed class Top10View : UserControl
         Controls.Add(titleRow);
     }
 
+    /// <summary>True once cards are on screen (so history can cheap-restore the tab).</summary>
+    public bool HasContent => _grid.Controls.Count > 0;
+
     public void Bind(RockfaxClient api, ImageFetcher images)
     {
         _api = api;

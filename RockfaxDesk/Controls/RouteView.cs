@@ -134,6 +134,10 @@ internal sealed class RouteView : UserControl
 
     private readonly Label _commentsHeader = Ui.SectionHeader("COMMENTS", 26);
 
+    /// <summary>The route this view is showing (0 before the first load) — lets history
+    /// re-select the tab without re-fetching a page that is already on screen.</summary>
+    public int CurrentRouteId { get; private set; }
+
     public void Bind(RockfaxClient api, ImageFetcher images)
     {
         _api = api;
@@ -145,6 +149,7 @@ internal sealed class RouteView : UserControl
     public async Task ShowRouteAsync(RouteSummary route, CancellationToken ct = default)
     {
         if (_api is null || _images is null) return;
+        CurrentRouteId = route.UkcId;
         Tag = route;
         _empty.Visible = false;
         _content.Visible = true;
