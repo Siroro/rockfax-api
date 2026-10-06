@@ -229,18 +229,19 @@ internal sealed class RouteView : UserControl
 
     internal static Panel PhotoCard(ImageFetcher images, int id, string title, string author, Image thumb)
     {
+        // No frame at rest — the thumbnail sits directly on the page; hover tints it.
         var card = new Panel
         {
-            Size = new Size(126, 126), Margin = new Padding(4), BackColor = Ui.Card,
-            Padding = new Padding(3), Cursor = Cursors.Hand, Tag = (id, title, author),
+            Size = new Size(126, 126), Margin = new Padding(4), BackColor = Ui.Bg,
+            Cursor = Cursors.Hand, Tag = (id, title, author),
         };
-        var box = new PictureBox { Image = thumb, Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Ui.BgDeep };
+        var box = new PictureBox { Image = thumb, Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Ui.Bg };
         card.Controls.Add(box);
         int photoId = id;
         card.Click += async (_, _) => await PhotoDialog.ShowFromStripAsync(images, card.Parent!, photoId);
         box.Click += async (_, _) => await PhotoDialog.ShowFromStripAsync(images, card.Parent!, photoId);
         card.MouseEnter += (_, _) => card.BackColor = Ui.AccentDim;
-        card.MouseLeave += (_, _) => card.BackColor = Ui.Card;
+        card.MouseLeave += (_, _) => card.BackColor = Ui.Bg;
         return card;
     }
 

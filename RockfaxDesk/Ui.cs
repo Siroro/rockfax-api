@@ -16,6 +16,11 @@ internal static class Ui
     public static readonly Color RowAlt    = Color.FromArgb(24, 35, 57);    // alternating rows
     public static readonly Color Card      = Color.FromArgb(27, 39, 62);    // cards, chips
     public static readonly Color Border    = Color.FromArgb(45, 61, 90);
+    // Near-flat fills: close enough to the page that a shape's edge (and its
+    // antialiasing halo) stops reading as a hairline border. Color lives in the ink.
+    public static readonly Color SurfaceSoft = Color.FromArgb(18, 27, 44);  // chips at rest
+    public static readonly Color BtnFace    = Color.FromArgb(16, 24, 41);   // buttons at rest
+    public static readonly Color CardSoft   = Color.FromArgb(22, 32, 51);   // weather tiles
     public static readonly Color Text      = Color.FromArgb(226, 232, 240);
     public static readonly Color Muted     = Color.FromArgb(133, 152, 180);
     public static readonly Color Accent    = Color.FromArgb(56, 189, 248);  // sky
@@ -50,9 +55,10 @@ internal static class Ui
 
     public static Button Button(string text, int width = 96, bool primary = false, bool danger = false)
     {
-        Color face = danger ? Color.FromArgb(70, 26, 30) : primary ? AccentDim : Panel;
+        Color face = danger ? Color.FromArgb(70, 26, 30) : primary ? AccentDim : BtnFace;
+        Color hotFace = primary || danger ? Lighten(face, 12) : Panel;
         Color ink = danger ? Red : primary ? Accent : Text;
-        return new UiButton(text, face, ink)
+        return new UiButton(text, face, hotFace, ink)
         {
             Width = width,
             Height = 32,
@@ -221,8 +227,8 @@ internal sealed class UiChip : Control
         Text = text;
         Font = Ui.BodyBold;
         _ink = ink;
-        _fill = fill ?? Ui.Card;
-        _hotFill = Ui.Lighten(_fill, 14);
+        _fill = fill ?? Ui.SurfaceSoft;
+        _hotFill = fill is null ? Ui.Panel : Ui.Lighten(_fill, 14);
         BackColor = Ui.Bg; // every chip host sits on Bg; the pill paints itself
         DoubleBuffered = true;
         ResizeRedraw = true;
@@ -502,17 +508,17 @@ internal sealed class UiList : ListView
 /// borderless) with hot/pressed/disabled states. Keeps Button semantics (Click, PerformClick).</summary>
 internal sealed class UiButton : Button
 {
-    private readonly Color _face, _ink, _hotFace, _downFace, _dimFace;
+    private readonly Color _face, _hotFace, _ink, _downFace, _dimFace;
     private bool _hot, _pressed;
 
-    public UiButton(string text, Color face, Color ink)
+    public UiButton(string text, Color face, Color hotFace, Color ink)
     {
         Text = text;
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
                  | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         _face = face;
+        _hotFace = hotFace;
         _ink = ink;
-        _hotFace = Ui.Lighten(face, 12);
         _downFace = Ui.AccentDim;
         _dimFace = Ui.Panel;
         Font = Ui.BodyBold;

@@ -435,7 +435,7 @@ internal sealed class CragView : UserControl
 /// <summary>One painted weather-day card.</summary>
 internal sealed class WeatherChip : Control
 {
-    private static readonly SolidBrush CardFill = new(Ui.Card);
+    private static readonly SolidBrush CardFill = new(Ui.CardSoft);
 
     public string Day = "";
     public int Temp, RainPct, Wind, Code;
