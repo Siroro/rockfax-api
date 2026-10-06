@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Drawing;
 
 namespace RockfaxDesk;
@@ -169,9 +170,11 @@ internal sealed class UiList : ListView
     /// <summary>Column index → text ink for that column (empty = default).</summary>
     public readonly Dictionary<int, Color> ColumnInk = new();
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool AltRows { get; set; } = true;
 
     /// <summary>Click a column header to sort by it (non-virtual lists only).</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool ColumnSorting { get; set; } = true;
     private int _sortColumn = -1;
     private bool _sortDesc;

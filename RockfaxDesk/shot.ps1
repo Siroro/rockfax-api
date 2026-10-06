@@ -9,7 +9,10 @@ public class W {
   public struct RECT { public int L; public int T; public int R; public int B; }
 }
 "@
-$p = Get-Process RockfaxDesk -ErrorAction Stop
+$p = Get-Process RockfaxDesk -ErrorAction Stop |
+    Where-Object { $_.MainWindowHandle -ne 0 } |
+    Select-Object -First 1
+if (-not $p) { throw "No RockfaxDesk process with a window found." }
 $h = $p.MainWindowHandle
 $r = New-Object W+RECT
 [W]::GetWindowRect($h, [ref]$r) | Out-Null

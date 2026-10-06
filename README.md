@@ -5,6 +5,7 @@
 | ![Crag map](docs/screenshot-map.png) | ![Route page](docs/screenshot-route.png) |
 
 Reverse engineered from the Rockfax Android app (`com.rockfax.rockfax.rockfax`, version code 3100).
+Targets **.NET 10** (`net10.0` / `net10.0-windows`); no external NuGet dependencies.
 Everything here replicates what the app's `com.rockfax.rockfax.ukcapi` package puts on the wire.
 
 > ## Disclaimer
@@ -21,8 +22,8 @@ Everything here replicates what the app's `com.rockfax.rockfax.ukcapi` package p
 git clone https://github.com/Siroro/rockfax-api.git
 cd rockfax-api
 
-# build the library (net8.0, no NuGet dependencies)
-dotnet build RockfaxApi.csproj
+# build everything (library + demo + desktop app; .NET 10 SDK)
+dotnet build RockfaxExplorer.slnx
 
 # run the console demo — public endpoints need no account
 dotnet run --project RockfaxApi.Demo -- free-crags

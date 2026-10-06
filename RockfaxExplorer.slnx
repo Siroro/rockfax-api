@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="RockfaxApi.csproj" />
+  <Project Path="RockfaxApi.Demo/RockfaxApi.Demo.csproj" />
+  <Project Path="RockfaxDesk/RockfaxDesk.csproj" />
+</Solution>

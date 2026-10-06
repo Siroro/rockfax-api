@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build (Release)
+        run: dotnet build RockfaxExplorer.slnx -c Release
+
+      # Exercises the real UI data paths against the live UKC API; kept soft so a
+      # third-party hiccup never blocks a push.
+      - name: Headless self-test (live API, non-blocking)
+        run: dotnet run --project RockfaxDesk -c Release --no-build -- --self-test
+        continue-on-error: true

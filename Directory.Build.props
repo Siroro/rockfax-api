@@ -1,0 +1,14 @@
+<Project>
+
+  <!-- Shared across all projects in this repo (library, demo, desktop app). -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Version>1.1.0</Version>
+    <Authors>Siroro</Authors>
+    <Product>Rockfax Explorer</Product>
+    <RepositoryUrl>https://github.com/Siroro/rockfax-api</RepositoryUrl>
+  </PropertyGroup>
+
+</Project>

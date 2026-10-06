@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -49,6 +50,7 @@ internal sealed class CragMapCanvas : Control
         _tiles = new TileCache(this);
     }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public IReadOnlyList<CragPoint> Points
     {
         get => _points;
