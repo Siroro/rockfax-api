@@ -171,6 +171,11 @@ internal sealed class UiList : ListView
 
     public bool AltRows { get; set; } = true;
 
+    /// <summary>Click a column header to sort by it (non-virtual lists only).</summary>
+    public bool ColumnSorting { get; set; } = true;
+    private int _sortColumn = -1;
+    private bool _sortDesc;
+
     public UiList()
     {
         Dock = DockStyle.Fill; // every list in the app fills its host
@@ -186,6 +191,38 @@ internal sealed class UiList : ListView
         DrawSubItem += DrawItem;
         Resize += (_, _) => StretchLastColumn();
         DarkScroll.Apply(this);
+        ColumnClick += OnColumnClicked;
+    }
+
+    private void OnColumnClicked(object? sender, ColumnClickEventArgs e)
+    {
+        if (VirtualMode || !ColumnSorting || Items.Count == 0) return;
+        if (e.Column == _sortColumn) _sortDesc = !_sortDesc;
+        else { _sortColumn = e.Column; _sortDesc = false; }
+        SortByColumn(_sortColumn, _sortDesc);
+    }
+
+    /// <summary>Re-orders items by a subitem's text (numeric-aware). Groups are preserved.</summary>
+    public void SortByColumn(int column, bool descending)
+    {
+        _sortColumn = column;
+        _sortDesc = descending;
+        if (VirtualMode || column < 0) return;
+        BeginUpdate();
+        var items = Items.Cast<ListViewItem>().ToList();
+        items.Sort((a, b) =>
+        {
+            string at = column < a.SubItems.Count ? a.SubItems[column].Text : "";
+            string bt = column < b.SubItems.Count ? b.SubItems[column].Text : "";
+            int c;
+            if (double.TryParse(at, out double an) && double.TryParse(bt, out double bn)) c = an.CompareTo(bn);
+            else c = string.Compare(at, bt, StringComparison.OrdinalIgnoreCase);
+            return descending ? -c : c;
+        });
+        Items.Clear();
+        Items.AddRange(items.ToArray());
+        EndUpdate();
+        Invalidate();
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -227,7 +264,11 @@ internal sealed class UiList : ListView
         g.FillRectangle(bg, e.Bounds);
         using var under = new Pen(Ui.AccentDim);
         g.DrawLine(under, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
-        TextRenderer.DrawText(g, e.Header.Text, Ui.BodyBold,
+        string label = e.Header.Text;
+        var list = (UiList)sender!;
+        if (list.ColumnSorting && e.ColumnIndex == list._sortColumn)
+            label += list._sortDesc ? " ▼" : " ▲";
+        TextRenderer.DrawText(g, label, Ui.BodyBold,
             new Point(e.Bounds.Left + 10, e.Bounds.Top + (e.Bounds.Height - Ui.BodyBold.Height) / 2), Ui.Muted);
         using var sep = new Pen(Ui.Border);
         g.DrawLine(sep, e.Bounds.Right - 1, 6, e.Bounds.Right - 1, e.Bounds.Bottom - 6);
