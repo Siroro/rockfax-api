@@ -154,9 +154,10 @@ public sealed class MainForm : Form
             if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await CragFilterAsync(_txtCragFilter.Text); }
             if (e.KeyCode == Keys.Escape) { _txtCragFilter.Clear(); }
         };
-        KeyDown += (_, e) =>
+        KeyDown += async (_, e) =>
         {
             if (e.Control && e.KeyCode == Keys.F) { _txtSearch.Focus(); e.Handled = true; }
+            if (e.KeyCode == Keys.F5) { await ReloadCurrentAsync(); e.Handled = true; }
         };
     }
 
@@ -448,8 +449,12 @@ public sealed class MainForm : Form
             if (first is not null) await OpenRouteAsync(first);
         });
 
+    private RouteSummary? _lastRoute;
+    private (int Id, string Name)? _lastCrag;
+
     private async Task OpenRouteAsync(RouteSummary route)
     {
+        _lastRoute = route;
         _tabs.Select(0);
         await _routeView.ShowRouteAsync(route);
         _lblStatus.Text = $"route: {route.Name}";
@@ -457,11 +462,22 @@ public sealed class MainForm : Form
 
     private async Task OpenCragAsync(int ukcCragId, string name)
     {
+        _lastCrag = (ukcCragId, name);
         _tabs.Select(1);
         _map.SelectCrag(ukcCragId); // ring the dot on the map too
         await _cragView.ShowCragAsync(ukcCragId, name);
         _lblStatus.Text = $"crag: {name}";
     }
+
+    private Task ReloadCurrentAsync()
+        => RunAsync("refreshing", async () =>
+        {
+            if (_tabs.SelectedIndex == 0 && _lastRoute is not null) { await _routeView.ShowRouteAsync(_lastRoute); _lblStatus.Text = $"route: {_lastRoute.Name}"; }
+            else if (_tabs.SelectedIndex == 1 && _lastCrag is not null) { await _cragView.ShowCragAsync(_lastCrag.Value.Id, _lastCrag.Value.Name); _lblStatus.Text = $"crag: {_lastCrag.Value.Name}"; }
+            else if (_tabs.SelectedIndex == 4) { await _top10View.LoadAsync(); }
+            else if (_tabs.SelectedIndex == 3 && _api.IsLoggedIn) { await _logbookView.LoadAsync(_api); }
+            else _lblStatus.Text = "nothing to refresh on this tab";
+        });
 
     /// <summary>Fetches markers once (shared by map + crag lists) and paints the map.</summary>
     private async Task<List<CragPoint>> EnsureCragPointsAsync()

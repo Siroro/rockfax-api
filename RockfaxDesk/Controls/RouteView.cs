@@ -42,6 +42,7 @@ internal sealed class RouteView : UserControl
             Dock = DockStyle.Bottom, Height = 146, AutoScroll = true, BackColor = Ui.BgDeep,
             Padding = new Padding(8), WrapContents = false,
         };
+        DarkScroll.Apply(strip);
         strip.MouseWheel += (_, e) =>
         {
             if (!strip.HorizontalScroll.Visible) return;

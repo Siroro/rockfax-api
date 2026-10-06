@@ -53,8 +53,21 @@ internal sealed class LogbookView : UserControl
         _split.Panel2.Controls.Add(_lblWishlist);
         _split.SplitterDistance = 420;
 
+        var empty = new Label
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = false,
+            Text = "Sign in (top right) with your UKClimbing account to browse\nyour ascents and wishlist.",
+            ForeColor = Ui.Muted,
+            Font = Ui.H2,
+            TextAlign = ContentAlignment.MiddleCenter,
+            BackColor = Ui.Bg,
+        };
+        Controls.Add(empty);
         Controls.Add(_split);
         Controls.Add(titleRow);
+        _split.Visible = false;
+        Tag = empty; // revealed by LoadAsync
     }
 
     public async Task LoadAsync(RockfaxClient api)

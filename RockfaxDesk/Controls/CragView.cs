@@ -24,6 +24,8 @@ internal sealed class CragView : UserControl
         Dock = DockStyle.Top, Height = 84, BackColor = Ui.Bg, Padding = new Padding(12, 4, 0, 0), WrapContents = false,
     };
     private readonly UiList _lvRoutes = new();
+    private readonly List<(RouteSummary Summary, string Buttress, int Band)> _allRoutes = new();
+    private int _bandFilter = -1; // -1 = all
     private readonly FlowLayoutPanel _photos = RouteView.NewPhotoStrip();
     private readonly Label _lblStatus = Ui.Label("", Ui.Amber, Ui.Small);
 
@@ -99,6 +101,8 @@ internal sealed class CragView : UserControl
 
         _lblTitle.Text = knownTitle.Length > 0 ? knownTitle : $"Crag {ukcCragId}";
         _grades.Controls.Clear();
+        _allRoutes.Clear();
+        _bandFilter = -1;
         _weather.Controls.Clear();
         _lvRoutes.Items.Clear();
         foreach (Control c in _photos.Controls)
@@ -132,10 +136,8 @@ internal sealed class CragView : UserControl
                         int[] g = grades.EnumerateArray().Select(x => x.GetInt32()).ToArray();
                         if (g.Length >= 4)
                         {
-                            _grades.Controls.Add(Ui.Chip($"{g[0]}  Mod-VD", Ui.Green));
-                            _grades.Controls.Add(Ui.Chip($"{g[1]}  S-HS", Ui.Amber));
-                            _grades.Controls.Add(Ui.Chip($"{g[2]}  VS-HVS", Color.FromArgb(251, 146, 60)));
-                            _grades.Controls.Add(Ui.Chip($"{g[3]}  E1+", Ui.Red));
+                            _gradeCounts = g;
+                            BuildGradeChips();
                         }
                     }
                 }
@@ -147,36 +149,19 @@ internal sealed class CragView : UserControl
             _metaChips.Controls.Add(ukcLink);
             _metaChips.Controls.Add(Ui.Chip($"UKC #{ukcCragId}", Ui.Muted));
 
+            _allRoutes.Clear();
             if (root.TryGetProperty("routes", out JsonElement routes) && routes.ValueKind == JsonValueKind.Array)
             {
-                _lvRoutes.Groups.Clear();
-                var groups = new Dictionary<string, ListViewGroup>();
                 foreach (JsonElement route in routes.EnumerateArray())
                 {
                     var summary = new RouteSummary(
                         route.Str("name"), route.Str("grade"), route.Str("techGrade"), route.Int("stars"),
                         cragName, route.Int("ukcID"), route.Int("rockfaxID"), ukcCragId);
                     if (summary.UkcId == 0 && summary.RockfaxId == 0) continue;
-
-                    string buttress = route.Str("buttress");
-                    if (buttress.Length == 0) buttress = "General";
-                    if (!groups.TryGetValue(buttress, out ListViewGroup? group))
-                    {
-                        group = new ListViewGroup(buttress);
-                        groups[buttress] = group;
-                        _lvRoutes.Groups.Add(group);
-                    }
-
-                    var item = new ListViewItem(summary.Name, group);
-                    item.SubItems.Add(summary.Grade);
-                    item.SubItems.Add(summary.TechGrade);
-                    item.SubItems.Add(Jx.Stars(summary.Stars));
-                    item.SubItems.Add(summary.UkcId.ToString());
-                    item.Tag = summary;
-                    _lvRoutes.Items.Add(item);
+                    _allRoutes.Add((summary, route.Str("buttress"), GradeBand(summary.Grade)));
                 }
-                _lvRoutes.ShowGroups = true;
             }
+            ApplyRouteFilter();
             _lvRoutes.StretchLastColumn();
         }
         catch (Exception ex)
@@ -216,6 +201,68 @@ internal sealed class CragView : UserControl
         _lblStatus.Text = _lvRoutes.Items.Count > 0
             ? $"{_lvRoutes.Items.Count} routes — double-click for route details" + (shown > 0 ? $"  ·  {shown} photos" : "")
             : "no routes listed";
+    }
+
+    private int[] _gradeCounts = Array.Empty<int>();
+
+    private static int GradeBand(string grade)
+    {
+        if (grade.StartsWith("M") || grade.StartsWith("D") || grade.StartsWith("VD")) return 0;
+        if (grade.StartsWith("S") || grade.StartsWith("HS")) return 1;
+        if (grade.StartsWith("VS") || grade.StartsWith("HVS")) return 2;
+        if (grade.StartsWith("E")) return 3;
+        return -1; // sport, boulder, winter, unknown
+    }
+
+    private void BuildGradeChips()
+    {
+        _grades.Controls.Clear();
+        string[] labels = { "Mod-VD", "S-HS", "VS-HVS", "E1+" };
+        Color[] inks = { Ui.Green, Ui.Amber, Color.FromArgb(251, 146, 60), Ui.Red };
+        for (int band = 0; band < 4; band++)
+        {
+            Color ink = inks[band];
+            var chip = Ui.Chip($"{_gradeCounts[band]}  {labels[band]}",
+                               _bandFilter == band ? Ui.Bg : ink,
+                               _bandFilter == band ? ink : Ui.Card);
+            int captured = band;
+            chip.Cursor = Cursors.Hand;
+            chip.Click += (_, _) =>
+            {
+                _bandFilter = _bandFilter == captured ? -1 : captured;
+                BuildGradeChips();
+                ApplyRouteFilter();
+            };
+            _grades.Controls.Add(chip);
+        }
+    }
+
+    private void ApplyRouteFilter()
+    {
+        _lvRoutes.BeginUpdate();
+        _lvRoutes.Groups.Clear();
+        _lvRoutes.Items.Clear();
+        var groups = new Dictionary<string, ListViewGroup>();
+        foreach ((RouteSummary summary, string buttress, int band) in _allRoutes)
+        {
+            if (_bandFilter >= 0 && band != _bandFilter) continue;
+            string b = buttress.Length > 0 ? buttress : "General";
+            if (!groups.TryGetValue(b, out ListViewGroup? group))
+            {
+                group = new ListViewGroup(b);
+                groups[b] = group;
+                _lvRoutes.Groups.Add(group);
+            }
+            var item = new ListViewItem(summary.Name, group);
+            item.SubItems.Add(summary.Grade);
+            item.SubItems.Add(summary.TechGrade);
+            item.SubItems.Add(Jx.Stars(summary.Stars));
+            item.SubItems.Add(summary.UkcId.ToString());
+            item.Tag = summary;
+            _lvRoutes.Items.Add(item);
+        }
+        _lvRoutes.ShowGroups = true;
+        _lvRoutes.EndUpdate();
     }
 
     internal static List<WeatherChip> FormatWeather(JsonDocument doc)

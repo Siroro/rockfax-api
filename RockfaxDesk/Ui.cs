@@ -142,11 +142,30 @@ internal static class Ui
 /// Dark owner-drawn ListView: themed header band, alternating rows, accent selection,
 /// optional per-column ink colors. All lists in the app use this.
 /// </summary>
-internal sealed class UiList : ListView
+internal static class DarkScroll
 {
     [System.Runtime.InteropServices.DllImport("uxtheme.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
     private static extern int SetWindowTheme(IntPtr hWnd, string? subAppName, string? subIdList);
 
+    /// <summary>Applies the DarkMode_Explorer scrollbar theme once a handle exists.</summary>
+    public static void Apply(Control control)
+    {
+        control.HandleCreated += (_, _) =>
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(10))
+            {
+                try { SetWindowTheme(control.Handle, "DarkMode_Explorer", null); } catch { /* best effort */ }
+            }
+        };
+        if (control.IsHandleCreated && OperatingSystem.IsWindowsVersionAtLeast(10))
+        {
+            try { SetWindowTheme(control.Handle, "DarkMode_Explorer", null); } catch { /* best effort */ }
+        }
+    }
+}
+
+internal sealed class UiList : ListView
+{
     /// <summary>Column index → text ink for that column (empty = default).</summary>
     public readonly Dictionary<int, Color> ColumnInk = new();
 
@@ -166,15 +185,7 @@ internal sealed class UiList : ListView
         DrawColumnHeader += DrawHeader;
         DrawSubItem += DrawItem;
         Resize += (_, _) => StretchLastColumn();
-    }
-
-    protected override void OnHandleCreated(EventArgs e)
-    {
-        base.OnHandleCreated(e);
-        if (OperatingSystem.IsWindowsVersionAtLeast(10))
-        {
-            try { SetWindowTheme(Handle, "DarkMode_Explorer", null); } catch { /* best effort */ }
-        }
+        DarkScroll.Apply(this);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)

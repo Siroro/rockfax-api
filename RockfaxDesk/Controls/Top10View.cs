@@ -19,7 +19,11 @@ internal sealed class Top10View : UserControl
     public Top10View()
     {
         BackColor = Ui.Bg;
-        var titleRow = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = Ui.Bg, Padding = new Padding(10, 4, 0, 0) };
+        var titleRow = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = Ui.Bg, Padding = new Padding(10, 4, 10, 0) };
+        var refresh = Ui.Button("Refresh", 84);
+        refresh.Dock = DockStyle.Right;
+        refresh.Click += async (_, _) => await LoadAsync();
+        titleRow.Controls.Add(refresh);
         titleRow.Controls.Add(Ui.Label("WEEKLY TOP 10 PHOTOS", Ui.Text, Ui.H2));
         _lblStatus.Dock = DockStyle.Top;
         _lblStatus.Height = 20;
