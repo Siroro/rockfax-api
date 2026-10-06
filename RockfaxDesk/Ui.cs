@@ -187,8 +187,27 @@ internal static class DarkScroll
     [System.Runtime.InteropServices.DllImport("uxtheme.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
     private static extern int SetWindowTheme(IntPtr hWnd, string? subAppName, string? subIdList);
 
-    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string? cls, string? win);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private const int LvmSetExtendedStyle = 0x1036;   // LVM_SETEXTENDEDLISTVIEWSTYLE
+    private const int LvsExDoubleBuffer = 0x00010000; // LVS_EX_DOUBLEBUFFER
+
+    /// <summary>Routes native listview painting through a memory buffer. Without it
+    /// every hover/selection change repaints the surface unbuffered and flickers.
+    /// Must run after base.OnHandleCreated — WinForms re-applies its own extended
+    /// styles there and clears bits it doesn't manage.</summary>
+    internal static void EnableDoubleBuffer(IntPtr handle)
+    {
+        try
+        {
+            SendMessage(handle, LvmSetExtendedStyle, (IntPtr)LvsExDoubleBuffer, (IntPtr)LvsExDoubleBuffer);
+        }
+        catch { /* best effort */ }
+    }
 
     /// <summary>Applies the DarkMode_Explorer scrollbar theme once a handle exists.</summary>
     public static void Apply(Control control)
@@ -258,6 +277,12 @@ internal sealed class UiList : ListView
         ColumnClick += OnColumnClicked;
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e); // ListView re-applies its extended styles here, clearing ours
+        DarkScroll.EnableDoubleBuffer(Handle);
+    }
+
     private void OnColumnClicked(object? sender, ColumnClickEventArgs e)
     {
         if (VirtualMode || !ColumnSorting || Items.Count == 0) return;
@@ -296,8 +321,11 @@ internal sealed class UiList : ListView
         int row = hit.Item is not null ? hit.Item.Index : -1;
         if (row != _hoverRow)
         {
+            int previous = _hoverRow;
             _hoverRow = row;
-            Invalidate();
+            // repaint just the two rows that changed, not the whole surface
+            InvalidateRow(previous);
+            InvalidateRow(row);
             HoverRowChanged?.Invoke(row);
         }
     }
@@ -307,9 +335,16 @@ internal sealed class UiList : ListView
         base.OnMouseLeave(e);
         if (_hoverRow != -1)
         {
+            InvalidateRow(_hoverRow);
             _hoverRow = -1;
-            Invalidate();
         }
+    }
+
+    private void InvalidateRow(int index)
+    {
+        if (index < 0 || index >= Items.Count) return;
+        Rectangle bounds = Items[index].Bounds;
+        if (bounds.Width > 0 && bounds.Height > 0) Invalidate(bounds);
     }
 
     /// <summary>Sizes the last column to exactly the remaining client width. Call after
@@ -324,21 +359,22 @@ internal sealed class UiList : ListView
         Columns[^1].Width = Math.Max(60, ClientSize.Width - others);
     }
 
+    private static readonly SolidBrush HeaderBrush = new(Ui.BgDeep);
+    private static readonly Pen HeaderUnderline = new(Ui.AccentDim);
+    private static readonly Pen HeaderSeparator = new(Ui.Border);
+
     private static void DrawHeader(object? sender, DrawListViewColumnHeaderEventArgs e)
     {
         Graphics g = e.Graphics;
-        using var bg = new SolidBrush(Ui.BgDeep);
-        g.FillRectangle(bg, e.Bounds);
-        using var under = new Pen(Ui.AccentDim);
-        g.DrawLine(under, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+        g.FillRectangle(HeaderBrush, e.Bounds);
+        g.DrawLine(HeaderUnderline, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
         string label = e.Header?.Text ?? "";
         if (sender is not UiList list) return;
         if (list.ColumnSorting && e.ColumnIndex == list._sortColumn)
-            label += list._sortDesc ? " ▼" : " ▲";
+            label += list._sortDesc ? " \u25bc" : " \u25b2";
         TextRenderer.DrawText(g, label, Ui.BodyBold,
             new Point(e.Bounds.Left + 10, e.Bounds.Top + (e.Bounds.Height - Ui.BodyBold.Height) / 2), Ui.Muted);
-        using var sep = new Pen(Ui.Border);
-        g.DrawLine(sep, e.Bounds.Right - 1, 6, e.Bounds.Right - 1, e.Bounds.Bottom - 6);
+        g.DrawLine(HeaderSeparator, e.Bounds.Right - 1, 6, e.Bounds.Right - 1, e.Bounds.Bottom - 6);
     }
 
     private int _hoverRow = -1;
@@ -348,16 +384,23 @@ internal sealed class UiList : ListView
 
     public int HoverRow => _hoverRow;
 
+    // Cached row paints: owner-draw runs these for every visible cell on every
+    // hover/selection/scroll repaint, so allocating brushes there shows up as churn.
+    private static readonly SolidBrush RowBrush = new(Ui.Panel);
+    private static readonly SolidBrush RowAltBrush = new(Ui.RowAlt);
+    private static readonly SolidBrush RowHoverBrush = new(Color.FromArgb(34, 48, 74));
+    private static readonly SolidBrush RowSelectedBrush = new(Ui.Selection);
+    private static readonly Pen RowSelectedAccent = new(Ui.Accent, 2f);
+
     private void DrawSubItemRow(object? sender, DrawListViewSubItemEventArgs e)
     {
         if (e.Item is null) return;
         bool selected = e.Item.Selected;
-        Color bg = selected ? Ui.Selection
-            : e.ItemIndex == _hoverRow ? Color.FromArgb(34, 48, 74)
-            : AltRows && e.ItemIndex % 2 == 1 ? Ui.RowAlt
-            : Ui.Panel;
-        using (var brush = new SolidBrush(bg))
-            e.Graphics.FillRectangle(brush, e.Bounds);
+        SolidBrush bg = selected ? RowSelectedBrush
+            : e.ItemIndex == _hoverRow ? RowHoverBrush
+            : AltRows && e.ItemIndex % 2 == 1 ? RowAltBrush
+            : RowBrush;
+        e.Graphics.FillRectangle(bg, e.Bounds);
 
         Color ink = e.ColumnIndex == 0 ? Ui.Text
             : ColumnInk.TryGetValue(e.ColumnIndex, out Color c) ? c
@@ -369,10 +412,7 @@ internal sealed class UiList : ListView
             new Point(e.Bounds.Left + 10, e.Bounds.Top + (e.Bounds.Height - Ui.Body.Height) / 2), ink);
 
         if (selected)
-        {
-            using var accent = new Pen(Ui.Accent, 2f);
-            e.Graphics.DrawLine(accent, e.Bounds.Left, e.Bounds.Top, e.Bounds.Left, e.Bounds.Bottom);
-        }
+            e.Graphics.DrawLine(RowSelectedAccent, e.Bounds.Left, e.Bounds.Top, e.Bounds.Left, e.Bounds.Bottom);
     }
 }
 
