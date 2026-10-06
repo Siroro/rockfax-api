@@ -70,7 +70,7 @@ internal sealed class Top10View : UserControl
         var card = new Panel
         {
             Size = new Size(224, 236), Margin = new Padding(8), BackColor = Ui.Card,
-            Padding = new Padding(6, 6, 6, 0), Cursor = Cursors.Hand, Tag = id,
+            Padding = new Padding(6, 6, 6, 0), Cursor = Cursors.Hand, Tag = (id, title, author),
         };
         var box = new PictureBox { Image = thumb, Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Ui.BgDeep };
         var caption = new Label
@@ -89,9 +89,9 @@ internal sealed class Top10View : UserControl
         card.Controls.Add(caption);
         card.Controls.Add(rankBadge);
         int photoId = id;
-        card.Click += async (_, _) => await PhotoDialog.ShowAsync(images, photoId, title, author);
-        box.Click += async (_, _) => await PhotoDialog.ShowAsync(images, photoId, title, author);
-        caption.Click += async (_, _) => await PhotoDialog.ShowAsync(images, photoId, title, author);
+        card.Click += async (_, _) => await PhotoDialog.ShowFromStripAsync(images, card.Parent!, photoId);
+        box.Click += async (_, _) => await PhotoDialog.ShowFromStripAsync(images, card.Parent!, photoId);
+        caption.Click += async (_, _) => await PhotoDialog.ShowFromStripAsync(images, card.Parent!, photoId);
         card.MouseEnter += (_, _) => card.BackColor = Ui.AccentDim;
         card.MouseLeave += (_, _) => card.BackColor = Ui.Card;
         return card;

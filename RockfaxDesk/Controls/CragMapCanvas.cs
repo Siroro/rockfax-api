@@ -59,6 +59,13 @@ internal sealed class CragMapCanvas : Control
 
     public string Subtitle => _points.Count == 0 ? "" : $"{_points.Count:N0} crags · zoom ×{_zoom:0.0}";
 
+    /// <summary>Rings the dot for a crag opened elsewhere (list, route page).</summary>
+    public void SelectCrag(int ukcId)
+    {
+        _selected = _points.FirstOrDefault(p => p.UkcId == ukcId);
+        if (_selected is not null) Invalidate();
+    }
+
     public void ResetView()
     {
         _zoom = 1f;

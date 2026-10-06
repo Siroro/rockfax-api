@@ -17,6 +17,7 @@ internal sealed class RouteView : UserControl
         Dock = DockStyle.Top, Height = 34, BackColor = Ui.Bg, Padding = new Padding(12, 4, 0, 0), WrapContents = false,
     };
     private readonly Button _lnkCrag = Ui.Button("open crag", 150);
+    private readonly Button _lnkUkc = Ui.Button("on UKC \u2197", 92);
     private readonly UiList _lvComments = new();
     private readonly TextBox _txtDescription = new()
     {
@@ -91,6 +92,11 @@ internal sealed class RouteView : UserControl
         {
             if (Tag is RouteSummary r && r.CragUkcId > 0) CragRequested?.Invoke(r.CragUkcId, r.CragName);
         };
+        _lnkUkc.Click += (_, _) =>
+        {
+            if (Tag is RouteSummary r && r.CragUkcId > 0)
+                Jx.OpenBrowser($"https://www.ukclimbing.com/logbook/crag.php?id={r.CragUkcId}");
+        };
     }
 
     private Panel HeaderBlock()
@@ -98,6 +104,7 @@ internal sealed class RouteView : UserControl
         var head = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = Ui.Bg, Padding = Padding.Empty };
         var linkRow = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 36, BackColor = Ui.Bg, WrapContents = false, Padding = new Padding(10, 0, 0, 0) };
         linkRow.Controls.Add(_lnkCrag);
+        linkRow.Controls.Add(_lnkUkc);
         var titleRow = new Panel { Dock = DockStyle.Top, Height = 38, BackColor = Ui.Bg, Padding = new Padding(10, 4, 0, 0) };
         titleRow.Controls.Add(_lblTitle);
         head.Controls.Add(linkRow);
@@ -205,13 +212,13 @@ internal sealed class RouteView : UserControl
         var card = new Panel
         {
             Size = new Size(126, 126), Margin = new Padding(4), BackColor = Ui.Card,
-            Padding = new Padding(3), Cursor = Cursors.Hand, Tag = id,
+            Padding = new Padding(3), Cursor = Cursors.Hand, Tag = (id, title, author),
         };
         var box = new PictureBox { Image = thumb, Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Ui.BgDeep };
         card.Controls.Add(box);
         int photoId = id;
-        card.Click += async (_, _) => await PhotoDialog.ShowAsync(images, photoId, title, author);
-        box.Click += async (_, _) => await PhotoDialog.ShowAsync(images, photoId, title, author);
+        card.Click += async (_, _) => await PhotoDialog.ShowFromStripAsync(images, card.Parent!, photoId);
+        box.Click += async (_, _) => await PhotoDialog.ShowFromStripAsync(images, card.Parent!, photoId);
         card.MouseEnter += (_, _) => card.BackColor = Ui.AccentDim;
         card.MouseLeave += (_, _) => card.BackColor = Ui.Card;
         return card;

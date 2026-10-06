@@ -4,6 +4,19 @@ namespace RockfaxDesk;
 
 internal static class Jx
 {
+    /// <summary>Opens a URL in the user's default browser.</summary>
+    internal static void OpenBrowser(string url)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        {
+            // no default browser configured \u2014 ignore
+        }
+    }
+
     internal static string Str(this JsonElement e, string prop)
         => e.TryGetProperty(prop, out JsonElement v) && v.ValueKind != JsonValueKind.Null ? v.ToString() : "";
 

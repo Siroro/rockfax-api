@@ -46,6 +46,22 @@ public sealed class MainForm : Form
     private readonly TabStrip _tabs = new();
     private SplitContainer _contentSplit;
 
+    private readonly Label _spinLabel = new()
+    {
+        Dock = DockStyle.Left,
+        Width = 30,
+        ForeColor = Ui.Accent,
+        BackColor = Ui.BgDeep,
+        Font = Ui.Mono,
+        TextAlign = ContentAlignment.MiddleCenter,
+        Text = "",
+    };
+    private readonly System.Windows.Forms.Timer _spinTimer = new() { Interval = 110 };
+    private int _busy;
+    private int _spinFrame;
+
+    private static readonly string[] SpinFrames = { "\u28CB", "\u2899", "\u28B9", "\u2839", "\u2838", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F" };
+
     private readonly Label _lblStatus = new()
     {
         Dock = DockStyle.Fill,
@@ -113,6 +129,12 @@ public sealed class MainForm : Form
         root.Controls.Add(BuildStatusBar(), 0, 3);
         Controls.Add(root);
 
+        _spinTimer.Tick += (_, _) =>
+        {
+            _spinLabel.Text = _busy > 0 ? SpinFrames[_spinFrame++ % SpinFrames.Length] : "";
+        };
+        _spinTimer.Start();
+
         // ---- events ------------------------------------------------------------
         _btnLogin.Click += async (_, _) => await LoginAsync();
         _btnLogbook.Click += async (_, _) => { _tabs.Select(3); await _logbookView.LoadAsync(_api); };
@@ -136,6 +158,15 @@ public sealed class MainForm : Form
         {
             if (e.Control && e.KeyCode == Keys.F) { _txtSearch.Focus(); e.Handled = true; }
         };
+    }
+
+    private void SetBusy(bool busy)
+    {
+        _busy = Math.Max(0, _busy + (busy ? 1 : -1));
+        UseWaitCursor = _busy > 0;
+        _btnSearch.Enabled = _btnAllCrags.Enabled = _btnFreeCrags.Enabled = _btnTop10.Enabled = _busy == 0;
+        if (_busy > 0) _spinTimer.Start();
+        else if (_busy == 0) { _spinTimer.Stop(); _spinLabel.Text = ""; }
     }
 
     protected override async void OnShown(EventArgs e)
@@ -275,6 +306,7 @@ public sealed class MainForm : Form
         right.Size = new Size(360, 26);
         bar.Controls.Add(right);
         bar.Controls.Add(_lblStatus);
+        bar.Controls.Add(_spinLabel);
         return bar;
     }
 
@@ -374,6 +406,7 @@ public sealed class MainForm : Form
     private async Task OpenCragAsync(int ukcCragId, string name)
     {
         _tabs.Select(1);
+        _map.SelectCrag(ukcCragId); // ring the dot on the map too
         await _cragView.ShowCragAsync(ukcCragId, name);
         _lblStatus.Text = $"crag: {name}";
     }

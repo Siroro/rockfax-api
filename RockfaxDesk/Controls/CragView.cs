@@ -146,6 +146,9 @@ internal sealed class CragView : UserControl
             }
             _lblTitle.Text = cragName.Length > 0 ? cragName : $"Crag {ukcCragId}";
             _metaChips.Controls.Clear();
+            var ukcLink = Ui.Button("on UKC \u2197", 92);
+            ukcLink.Click += (_, _) => Jx.OpenBrowser($"https://www.ukclimbing.com/logbook/crag.php?id={ukcCragId}");
+            _metaChips.Controls.Add(ukcLink);
             _metaChips.Controls.Add(Ui.Chip($"UKC #{ukcCragId}", Ui.Muted));
 
             if (root.TryGetProperty("routes", out JsonElement routes) && routes.ValueKind == JsonValueKind.Array)

@@ -177,6 +177,29 @@ internal sealed class UiList : ListView
         }
     }
 
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        var hit = HitTest(e.Location);
+        int row = hit.Item is not null ? hit.Item.Index : -1;
+        if (row != _hoverRow)
+        {
+            _hoverRow = row;
+            Invalidate();
+            HoverRowChanged?.Invoke(row);
+        }
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (_hoverRow != -1)
+        {
+            _hoverRow = -1;
+            Invalidate();
+        }
+    }
+
     /// <summary>Stretches the last column so the header band has no unpainted gap.</summary>
     public void StretchLastColumn()
     {
@@ -199,10 +222,18 @@ internal sealed class UiList : ListView
         g.DrawLine(sep, e.Bounds.Right - 1, 6, e.Bounds.Right - 1, e.Bounds.Bottom - 6);
     }
 
+    private int _hoverRow = -1;
+
+    /// <summary>Raised after the hovered row changes (view refreshes itself).</summary>
+    public event Action<int>? HoverRowChanged;
+
+    public int HoverRow => _hoverRow;
+
     private void DrawItem(object? sender, DrawListViewSubItemEventArgs e)
     {
         bool selected = e.Item.Selected;
         Color bg = selected ? Ui.Selection
+            : e.ItemIndex == _hoverRow ? Color.FromArgb(34, 48, 74)
             : AltRows && e.ItemIndex % 2 == 1 ? Ui.RowAlt
             : Ui.Panel;
         using (var brush = new SolidBrush(bg))
