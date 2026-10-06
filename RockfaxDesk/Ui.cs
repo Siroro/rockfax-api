@@ -248,13 +248,17 @@ internal sealed class UiList : ListView
         }
     }
 
-    /// <summary>Stretches the last column so the header band has no unpainted gap.</summary>
+    /// <summary>Stretches the last column so the header band has no unpainted gap,
+    /// reserving room for the vertical scrollbar when the list will scroll.</summary>
     public void StretchLastColumn()
     {
         if (Columns.Count == 0) return;
         int others = 0;
         for (int i = 0; i < Columns.Count - 1; i++) others += Columns[i].Width;
-        Columns[^1].Width = Math.Max(60, ClientSize.Width - others - 2);
+        bool willScrollVertically = !VirtualMode && Items.Count > 0 &&
+                                    Items.Count * 22 > ClientSize.Height;
+        int reserved = willScrollVertically ? SystemInformation.VerticalScrollBarWidth : 0;
+        Columns[^1].Width = Math.Max(60, ClientSize.Width - others - reserved - 2);
     }
 
     private static void DrawHeader(object? sender, DrawListViewColumnHeaderEventArgs e)

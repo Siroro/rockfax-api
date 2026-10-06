@@ -84,7 +84,7 @@ internal sealed class RouteView : UserControl
         topSplit.Panel1.Controls.Add(descHost);
         topSplit.Panel1.Controls.Add(HeaderBlock());
         topSplit.Panel2.Controls.Add(_lvComments);
-        topSplit.Panel2.Controls.Add(CommentsHeader());
+        topSplit.Panel2.Controls.Add(_commentsHeader);
 
         _split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, BackColor = Ui.Bg, SplitterWidth = 5 };
         _split.Panel1.BackColor = Ui.Bg;
@@ -131,12 +131,7 @@ internal sealed class RouteView : UserControl
         return head;
     }
 
-    private static Label CommentsHeader()
-    {
-        var l = Ui.SectionHeader("COMMENTS");
-        l.Height = 26;
-        return l;
-    }
+    private readonly Label _commentsHeader = Ui.SectionHeader("COMMENTS", 26);
 
     public void Bind(RockfaxClient api, ImageFetcher images)
     {
@@ -187,6 +182,7 @@ internal sealed class RouteView : UserControl
             }
             if (_lvComments.Items.Count == 0)
                 _lvComments.Items.Add(new ListViewItem("—") { SubItems = { "", "no comments yet" } });
+            _commentsHeader.Text = $"▍ COMMENTS ({_lvComments.Items.Count})";
             _lvComments.StretchLastColumn();
         }
         catch (Exception ex)

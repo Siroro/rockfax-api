@@ -203,8 +203,9 @@ drive it headlessly for captures):
   overseas crags and bad rows.
 - **Search & lists** — route search (Enter), crag filter, busiest-crags, free crags.
 - **Logbook** — sign in with your UKClimbing account for your ascents (UKC style
-  names decoded) with a live filter box, and your wishlist; double-click an ascent
-  to open the route.
+  names decoded, **climbing partners resolved to names**, CSV export) with a live
+  filter box, and your wishlist (grade/id columns, deleted entries skipped);
+  double-click any ascent or wishlist entry to open the route.
 - **Top 10** — the weekly photo grid with rank badges and ratings, refreshable.
 - **Shell** — hover-highlighted lists, a loading spinner in the status bar, buttons
   lock while a request is in flight, failures render in red, window/splitter
