@@ -63,6 +63,7 @@ public sealed class MainForm : Form
     private readonly CragMapCanvas _map = new();
     private readonly LogbookView _logbookView = new();
     private readonly Top10View _top10View = new();
+    private readonly ServicesView _servicesView = new();
     private readonly TabStrip _tabs = new();
     private SplitContainer? _contentSplit;
 
@@ -155,6 +156,7 @@ public sealed class MainForm : Form
         _routeView.Bind(_api, _images);
         _cragView.Bind(_api, _images);
         _top10View.Bind(_api, _images);
+        _servicesView.Bind(_api);
         _routeView.CragRequested += (id, name) => _ = OpenCragAsync(id, name);
         _cragView.RouteRequested += r => _ = OpenRouteAsync(r);
         _cragView.MapRequested += id =>
@@ -165,6 +167,7 @@ public sealed class MainForm : Form
         };
         _logbookView.RouteRequested += r => _ = OpenRouteAsync(r);
         _map.CragSelected += p => _ = OpenCragAsync(p.UkcId, p.Title);
+        _tabs.Selected += i => { if (i == 5) _ = _servicesView.LoadAsync(); };
 
         // ---- structure ---------------------------------------------------------
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Ui.Bg, ColumnCount = 1, RowCount = 4 };
@@ -247,7 +250,7 @@ public sealed class MainForm : Form
         KeyDown += async (_, e) =>
         {
             if (e.Control && e.KeyCode == Keys.F) { _txtSearch.Focus(); e.Handled = true; }
-            if (e.Control && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D5)
+            if (e.Control && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D6)
             {
                 _tabs.Select(e.KeyCode - Keys.D1);
                 e.Handled = true;
@@ -256,7 +259,7 @@ public sealed class MainForm : Form
             if (e.Alt && e.KeyCode == Keys.Right) { _ = GoForwardAsync(); e.Handled = true; }
             if (e.Control && e.KeyCode == Keys.Tab)
             {
-                int next = (_tabs.SelectedIndex + (e.Shift ? 4 : 1)) % 5;
+                int next = (_tabs.SelectedIndex + (e.Shift ? 5 : 1)) % 6;
                 _tabs.Select(next);
                 e.Handled = true;
             }
@@ -404,7 +407,7 @@ public sealed class MainForm : Form
             _restoreSplitter = s.Splitter;
             if (s.MapZoom > 0) _restoreMap = (s.MapZoom, s.MapCenterLat, s.MapCenterLng);
             if (!string.IsNullOrEmpty(s.LastSearch)) _txtSearch.Text = s.LastSearch; // restored, not auto-run
-            if (s.LastTab is >= 0 and <= 4) _restoreTab = s.LastTab;
+            if (s.LastTab is >= 0 and <= 5) _restoreTab = s.LastTab;
             if (s.Maximized) WindowState = FormWindowState.Maximized;
         }
         catch { /* best effort */ }
@@ -441,7 +444,7 @@ public sealed class MainForm : Form
                 "Not affiliated with Rockfax or UKClimbing; use your own account and keep request volume sane.\n\n" +
                 "Shortcuts:\n" +
                 "  Ctrl+F   focus search\n" +
-                "  Ctrl+1–5 switch tabs (route, crag, map, logbook, top 10)\n" +
+                "  Ctrl+1–6 switch tabs (route, crag, map, logbook, top 10, services)\n" +
                 "  Alt+←/→  back / forward through routes & crags (mouse side buttons work too)\n" +
                 "  Ctrl+Tab next tab (Shift for previous)\n" +
                 "  Enter    search / open selection\n" +
@@ -573,6 +576,7 @@ public sealed class MainForm : Form
         _tabs.AddTab("CRAG MAP", _map);
         _tabs.AddTab("LOGBOOK", _logbookView);
         _tabs.AddTab("TOP 10", _top10View);
+        _tabs.AddTab("SERVICES", _servicesView);
     }
 
     // ---- shared helpers ---------------------------------------------------
@@ -760,6 +764,7 @@ public sealed class MainForm : Form
             if (_tabs.SelectedIndex == 0 && _lastRoute is not null) { await _routeView.ShowRouteAsync(_lastRoute); _lblStatus.Text = $"route: {_lastRoute.Name}"; }
             else if (_tabs.SelectedIndex == 1 && _lastCrag is not null) { await _cragView.ShowCragAsync(_lastCrag.Value.Id, _lastCrag.Value.Name); _lblStatus.Text = $"crag: {_lastCrag.Value.Name}"; }
             else if (_tabs.SelectedIndex == 4) { await _top10View.LoadAsync(); }
+            else if (_tabs.SelectedIndex == 5) { await _servicesView.LoadAsync(force: true); }
             else if (_tabs.SelectedIndex == 3 && _api.IsLoggedIn) { await _logbookView.LoadAsync(_api); }
             else _lblStatus.Text = "nothing to refresh on this tab";
         });

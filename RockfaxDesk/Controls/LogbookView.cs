@@ -364,6 +364,69 @@ internal sealed class LogbookView : UserControl
         {
             _lblWishlist.Text = "▍ WISHLIST unavailable";
         }
+
+        // The logbook payload carries crag names but no crag ids — resolve them from
+        // logbook_route_details so the route page's "open crag" works from these rows.
+        try
+        {
+            using JsonDocument doc = await api.GetLogbookRouteDetailsAsync(api.UserId);
+            Dictionary<int, (int CragId, string CragName)> byRoute = ParseRouteDetails(doc);
+            int linked = 0;
+            foreach ((ListViewItem item, _) in _allAscents)
+                if (item.Tag is RouteSummary { CragUkcId: 0 } rs
+                    && byRoute.TryGetValue(rs.UkcId, out (int CragId, string CragName) d) && d.CragId > 0)
+                {
+                    item.Tag = rs with { CragUkcId = d.CragId, CragName = rs.CragName.Length > 0 ? rs.CragName : d.CragName };
+                    linked++;
+                }
+            foreach (ListViewItem item in _lvWishlist.Items)
+                if (item.Tag is RouteSummary { CragUkcId: 0 } rs
+                    && byRoute.TryGetValue(rs.UkcId, out (int CragId, string CragName) d) && d.CragId > 0)
+                {
+                    item.Tag = rs with { CragUkcId = d.CragId };
+                    linked++;
+                }
+            if (linked > 0) _lblStatus.Text += $"  ·  {linked} crag links resolved";
+        }
+        catch
+        {
+            // crag links are navigation sugar — ascents and the wishlist are already shown
+        }
+    }
+
+    /// <summary>Maps route id -> (crag id, crag name) from logbook_route_details.
+    /// The response shape varies (array of objects, or objects keyed by id), so any
+    /// object that carries a cragID plus a route id — its own or its key — is used.</summary>
+    internal static Dictionary<int, (int CragId, string CragName)> ParseRouteDetails(JsonDocument doc)
+    {
+        var map = new Dictionary<int, (int, string)>();
+        void Add(int routeId, JsonElement e)
+        {
+            int cragId = e.Int("cragID");
+            if (routeId > 0 && cragId > 0) map[routeId] = (cragId, e.Str("crag"));
+        }
+        void Walk(JsonElement node)
+        {
+            switch (node.ValueKind)
+            {
+                case JsonValueKind.Array:
+                    foreach (JsonElement e in node.EnumerateArray()) Walk(e);
+                    break;
+                case JsonValueKind.Object:
+                    if (node.TryGetProperty("cragID", out _)) Add(node.Int("ukcID"), node);
+                    foreach (JsonProperty p in node.EnumerateObject())
+                        if (p.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+                        {
+                            if (p.Value.ValueKind == JsonValueKind.Object
+                                && p.Value.TryGetProperty("cragID", out _) && int.TryParse(p.Name, out int id))
+                                Add(id, p.Value);
+                            Walk(p.Value);
+                        }
+                    break;
+            }
+        }
+        Walk(doc.RootElement);
+        return map;
     }
 
     /// <summary>Ascents may come keyed by id or in an array — collect any object that looks like an ascent.</summary>

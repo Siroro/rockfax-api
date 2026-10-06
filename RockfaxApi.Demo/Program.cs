@@ -57,9 +57,47 @@ switch (command)
         break;
     }
 
-    default:
-        Console.WriteLine("Commands: free-crags | top10 | markers | route-info <id> | search <text> | login <email> <pw> | logbook <email> <pw>");
+    case "crag-details": // crag-details <ukc|rockfax|ukh> <id>[|id...]
+    {
+        var site = ParseSite(args[1]);
+        var ids = args[2].Split('|').Select(int.Parse).ToList();
+        Print(await client.GetCragDetailsAsync(ids, site));
         break;
     }
 
+    case "crag-routes": // full route rows for one crag
+        Print(await client.GetCragRoutesAsync(int.Parse(args[1])));
+        break;
+
+    case "weather": // weather <ukc|rockfax> <id>
+    {
+        var site = ParseSite(args[1]);
+        Print(await client.GetWeatherAsync(new[] { int.Parse(args[2]) }, site));
+        break;
+    }
+
+    case "listings":
+        Print(await client.GetFreeListingsAsync());
+        break;
+
+    case "logbook-details": // logbook-details <email> <pw>
+    {
+        await client.LoginAsync(args[1], args[2]);
+        Print(await client.GetLogbookRouteDetailsAsync(client.UserId));
+        break;
+    }
+
+    default:
+        Console.WriteLine("Commands: free-crags | top10 | markers | route-info <id> | search <text> | login <email> <pw> | logbook <email> <pw> | crag-details <site> <ids> | crag-routes <id> | weather <site> <id> | listings");
+        break;
+}
+
 static void Print(JsonDocument doc) => Console.WriteLine(doc.RootElement.ToString());
+
+static Site ParseSite(string s) => s.ToLowerInvariant() switch
+{
+    "ukc" => Site.UkClimbing,
+    "rockfax" or "rf" => Site.Rockfax,
+    "ukh" => Site.UkHillwalking,
+    _ => throw new ArgumentException($"unknown site '{s}' (ukc|rockfax|ukh)"),
+};

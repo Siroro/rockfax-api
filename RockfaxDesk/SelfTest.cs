@@ -100,6 +100,29 @@ internal static class SelfTest
             return top10Count > 0 ? $"{top10Count} photos" : "empty";
         });
 
+        int guideCount = 0, parkingCount = 0;
+        await Step("crag-details (Stanage Popular, id 104)", async () =>
+        {
+            using JsonDocument doc = await api.GetCragDetailsAsync(new[] { 104 }, Site.UkClimbing);
+            CragInfo? info = CragView.ParseCragInfo(doc);
+            if (info is null) return "no crag object in response";
+            guideCount = info.Guidebooks.Count;
+            parkingCount = info.Parking.Count;
+            return info.Features.Length > 0 && info.Access.Length > 0
+                ? $"rocktype {info.RockType}, {guideCount} guidebooks, {parkingCount} parking, {info.Comments.Count} comments"
+                : "missing description or access notes";
+        });
+
+        await Step("listings", async () =>
+        {
+            using JsonDocument doc = await api.GetFreeListingsAsync();
+            List<ServiceItem> items = ServicesView.ParseListings(doc);
+            int types = items.Select(i => i.Type).Distinct().Count();
+            return items.Count > 100 && types >= 4
+                ? $"{items.Count:N0} listings across {types} types"
+                : $"suspiciously few listings ({items.Count}, {types} types)";
+        });
+
         // Constructing the real form verifies the UI wiring (no message pump needed for construction).
         try
         {

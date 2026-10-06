@@ -86,6 +86,49 @@ internal static class Jx
 
     internal static string DateFromUnix(long seconds)
         => seconds <= 0 ? "" : DateTimeOffset.FromUnixTimeSeconds(seconds).LocalDateTime.ToString("yyyy-MM-dd");
+
+    /// <summary>16-point compass label for a wind bearing in degrees.</summary>
+    internal static string Compass(int degrees)
+    {
+        string[] dirs = { "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW" };
+        int d = ((degrees % 360) + 360) % 360;
+        return dirs[(int)Math.Round(d / 22.5) % 16];
+    }
+
+    /// <summary>Strips tags and decodes the entities the API's HTML snippets use
+    /// (crag features/access, listing phone/web links), collapsing blank runs.</summary>
+    internal static string StripHtml(string html)
+    {
+        if (html.Length == 0) return "";
+        var sb = new System.Text.StringBuilder(html.Length);
+        bool inTag = false;
+        foreach (char c in html)
+        {
+            if (c == '<') { inTag = true; sb.Append(' '); }
+            else if (c == '>') inTag = false;
+            else if (!inTag) sb.Append(c);
+        }
+        string s = sb.ToString()
+            .Replace("&nbsp;", " ").Replace("&amp;", "&").Replace("&lt;", "<").Replace("&gt;", ">")
+            .Replace("&lsquo;", "\u2018").Replace("&rsquo;", "\u2019")
+            .Replace("&ldquo;", "\u201c").Replace("&rdquo;", "\u201d")
+            .Replace("&mdash;", "\u2014").Replace("&ndash;", "\u2013").Replace("&hellip;", "\u2026")
+            .Replace("&apos;", "'").Replace("&quot;", "\"");
+        s = System.Text.RegularExpressions.Regex.Replace(s, "&#(\\d+);",
+            m => int.TryParse(m.Groups[1].Value, out int code) ? char.ConvertFromUtf32(code) : m.Value);
+        var lines = s.Replace("\r\n", "\n").Split('\n');
+        var kept = new List<string>();
+        bool pendingBlank = false;
+        foreach (string raw in lines)
+        {
+            string line = raw.Trim();
+            if (line.Length == 0) { pendingBlank = kept.Count > 0; continue; }
+            if (pendingBlank) kept.Add("");
+            kept.Add(line);
+            pendingBlank = false;
+        }
+        return string.Join("\r\n", kept);
+    }
 }
 
 /// <summary>A route as shown in lists — carries everything RouteView needs.</summary>

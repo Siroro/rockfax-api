@@ -14,7 +14,8 @@ internal sealed class CragView : UserControl
     private readonly Label _lblTitle = Ui.Label("", Ui.Text, Ui.H1);
     private readonly FlowLayoutPanel _metaChips = new()
     {
-        Dock = DockStyle.Right, BackColor = Ui.Bg, WrapContents = false, Padding = new Padding(0, 8, 10, 0),
+        Dock = DockStyle.Right, BackColor = Ui.Bg, WrapContents = false, AutoSize = true,
+        Padding = new Padding(0, 8, 10, 0),
     };
     private readonly FlowLayoutPanel _grades = new()
     {
@@ -22,7 +23,7 @@ internal sealed class CragView : UserControl
     };
     private readonly FlowLayoutPanel _weather = new()
     {
-        Dock = DockStyle.Top, Height = 84, BackColor = Ui.Bg, Padding = new Padding(12, 4, 0, 0), WrapContents = false,
+        Dock = DockStyle.Top, Height = 92, BackColor = Ui.Bg, Padding = new Padding(12, 4, 0, 0), WrapContents = false,
     };
     private readonly UiList _lvRoutes = new();
     private readonly List<(RouteSummary Summary, string Buttress, int Band)> _allRoutes = new();
@@ -34,6 +35,45 @@ internal sealed class CragView : UserControl
     private static readonly string[] RouteColumnNames = { "Route", "Grade", "Tech", "Stars", "UKC id" };
     private readonly FlowLayoutPanel _photos = RouteView.NewPhotoStrip();
     private readonly Label _lblStatus = Ui.Label("", Ui.Amber, Ui.Small);
+
+    // ---- crag info (description / access / guidebooks / parking / comments) -----------
+    private readonly Label _infoHeader = Ui.SectionHeader("CRAG INFO", 30);
+    private readonly Panel _infoExpander = new() { Dock = DockStyle.Top, Height = 250, BackColor = Ui.Bg, Visible = false };
+    private readonly FlowLayoutPanel _infoChips = new()
+    {
+        Dock = DockStyle.Top, Height = 28, BackColor = Ui.Bg, Padding = new Padding(12, 2, 0, 0), WrapContents = false,
+    };
+    private readonly TextBox _txtFeatures = new()
+    {
+        Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
+        BorderStyle = BorderStyle.None, BackColor = Ui.Panel, ForeColor = Ui.Text, Font = Ui.Body,
+    };
+    private readonly TextBox _txtAccess = new()
+    {
+        Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
+        BorderStyle = BorderStyle.None, BackColor = Ui.Panel, ForeColor = Ui.Text, Font = Ui.Small,
+    };
+    private readonly Label _lblGuides = new()
+    {
+        Dock = DockStyle.Top, Height = 36, ForeColor = Ui.Text,
+        Font = Ui.Small, BackColor = Ui.Bg, Padding = new Padding(12, 2, 0, 0),
+    };
+    private readonly Label _lblParking = new()
+    {
+        Dock = DockStyle.Top, Height = 20, AutoEllipsis = true, ForeColor = Ui.Muted,
+        Font = Ui.Small, BackColor = Ui.Bg, Padding = new Padding(12, 2, 0, 0),
+    };
+    private readonly TextBox _txtCragComments = new()
+    {
+        Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
+        BorderStyle = BorderStyle.None, BackColor = Ui.Panel, ForeColor = Ui.Text, Font = Ui.Small,
+    };
+    private readonly Label _cragCommentsHeader = Ui.SectionHeader("CRAG COMMENTS", 24);
+    private readonly ToolTip _tips = new()
+    {
+        OwnerDraw = true, BackColor = Ui.BgDeep, ForeColor = Ui.Text, ShowAlways = true,
+    };
+    private bool _infoExpanded = true;
 
     private RockfaxClient? _api;
     private ImageFetcher? _images;
@@ -108,13 +148,54 @@ internal sealed class CragView : UserControl
                 _lvRoutes.EnsureVisible(_groupFirstItems[idx - 1]);
             }
         };
+        var jumpHost = new Panel { Dock = DockStyle.Top, Height = 30, BackColor = Ui.Bg, Padding = new Padding(10, 4, 0, 0) };
+        jumpHost.Controls.Add(_buttressJump);
         var routesHeader = Ui.SectionHeader("ROUTES — double-click for details", 26);
         var weatherHeader = Ui.SectionHeader("WEATHER", 24);
+        var accessHeader = Ui.SectionHeader("ACCESS & CONSERVATION", 24);
+        var guidesHeader = Ui.SectionHeader("GUIDEBOOKS", 24);
+
+        // Info expander: two columns so the routes table keeps room below.
+        // Left: chips + description (fills) + access. Right: guides, parking, comments (fills).
+        var featuresHost = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Panel, Padding = new Padding(8, 6, 8, 4) };
+        featuresHost.Controls.Add(_txtFeatures);
+        var accessHost = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = Ui.Panel, Padding = new Padding(8, 4, 8, 4) };
+        accessHost.Controls.Add(_txtAccess);
+        var commentsHost = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Panel, Padding = new Padding(8, 4, 8, 4) };
+        commentsHost.Controls.Add(_txtCragComments);
+        _lblGuides.Height = 36;
+
+        var left = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Padding = new Padding(0, 0, 6, 0) };
+        left.Controls.Add(featuresHost);
+        left.Controls.Add(accessHost);
+        left.Controls.Add(accessHeader);
+        left.Controls.Add(_infoChips);
+
+        var right = new Panel { Dock = DockStyle.Right, Width = 430, BackColor = Ui.Bg, Padding = new Padding(6, 0, 0, 0) };
+        right.Controls.Add(commentsHost);
+        right.Controls.Add(_cragCommentsHeader);
+        right.Controls.Add(_lblParking);
+        right.Controls.Add(_lblGuides);
+        right.Controls.Add(guidesHeader);
+
+        _infoExpander.Controls.Add(left);
+        _infoExpander.Controls.Add(right);
+        _infoHeader.Cursor = Cursors.Hand;
+        _infoHeader.Click += (_, _) => ToggleInfo();
+        _tips.Draw += (_, e) =>
+        {
+            e.DrawBackground();
+            using var border = new Pen(Ui.Border);
+            e.Graphics.DrawRectangle(border, 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
+            e.DrawText();
+        };
 
         _content.Controls.Add(_lvRoutes);
         _content.Controls.Add(_photos);
-        _content.Controls.Add(_buttressJump);
+        _content.Controls.Add(jumpHost);
         _content.Controls.Add(routesHeader);
+        _content.Controls.Add(_infoExpander);
+        _content.Controls.Add(_infoHeader);
         _content.Controls.Add(weatherHeader);
         _content.Controls.Add(_weather);
         _content.Controls.Add(_grades);
@@ -149,6 +230,16 @@ internal sealed class CragView : UserControl
         _bandFilter = -1;
         _weather.Controls.Clear();
         _lvRoutes.Items.Clear();
+        _infoHeader.Text = "▍ CRAG INFO";
+        _infoHeader.ForeColor = Ui.Accent;
+        _infoChips.Controls.Clear();
+        _txtFeatures.Clear();
+        _txtAccess.Clear();
+        _lblGuides.Text = "";
+        _lblParking.Text = "";
+        _txtCragComments.Clear();
+        _cragCommentsHeader.Text = "▍ CRAG COMMENTS";
+        _infoExpander.Visible = false;
         foreach (Control c in _photos.Controls)
             if (c is Panel { Controls.Count: > 0 } && c.Controls[0] is PictureBox pb)
                 pb.Image?.Dispose();
@@ -156,6 +247,7 @@ internal sealed class CragView : UserControl
         _lblStatus.Text = "loading crag…";
 
         string cragName = knownTitle;
+        string area = "";
 
         try
         {
@@ -171,9 +263,7 @@ internal sealed class CragView : UserControl
                     JsonElement crag = cragEntry.Value;
                     if (crag.ValueKind != JsonValueKind.Object) continue;
                     if (cragName.Length == 0) cragName = crag.Str("name");
-                    string area = crag.Str("areaName");
-                    if (area.Length > 0 && _metaChips.Controls.Count == 1)
-                        _metaChips.Controls.Add(Ui.Chip(area, Ui.Accent));
+                    if (area.Length == 0) area = crag.Str("areaName");
 
                     if (crag.TryGetProperty("gradeColors", out JsonElement grades) && grades.ValueKind == JsonValueKind.Array)
                     {
@@ -188,10 +278,11 @@ internal sealed class CragView : UserControl
             }
             _lblTitle.Text = cragName.Length > 0 ? cragName : $"Crag {ukcCragId}";
             _metaChips.Controls.Clear();
-            var mapBtn = Ui.Button("show on map", 104);
+            var mapBtn = Ui.Button("show on map", 118);
             mapBtn.Click += (_, _) => MapRequested?.Invoke(ukcCragId);
             var ukcLink = Ui.Button("on UKC \u2197", 92);
             ukcLink.Click += (_, _) => Jx.OpenBrowser($"https://www.ukclimbing.com/logbook/crag.php?id={ukcCragId}");
+            if (area.Length > 0) _metaChips.Controls.Add(Ui.Chip(area, Ui.Accent));
             _metaChips.Controls.Add(mapBtn);
             _metaChips.Controls.Add(ukcLink);
             _metaChips.Controls.Add(Ui.Chip($"UKC #{ukcCragId}", Ui.Muted));
@@ -220,12 +311,29 @@ internal sealed class CragView : UserControl
         {
             using JsonDocument doc = await _api.GetWeatherAsync(new[] { ukcCragId }, RockfaxApi.Site.UkClimbing);
             foreach (WeatherChip chip in FormatWeather(doc))
+            {
+                if (chip.Hourly is { Length: > 0 } hours) _tips.SetToolTip(chip, hours);
                 _weather.Controls.Add(chip);
+            }
             if (_weather.Controls.Count == 0) _weather.Controls.Add(Ui.Label("no forecast data", Ui.Muted, Ui.Small));
         }
         catch
         {
             _weather.Controls.Add(Ui.Label("weather unavailable", Ui.Muted, Ui.Small));
+        }
+
+        // Crag description / access / guidebooks / parking / crag comments.
+        try
+        {
+            using JsonDocument doc = await _api.GetCragDetailsAsync(new[] { ukcCragId }, RockfaxApi.Site.UkClimbing);
+            ShowInfo(ParseCragInfo(doc));
+        }
+        catch (Exception ex)
+        {
+            _infoHeader.Text = "▍ CRAG INFO — unavailable";
+            _infoHeader.ForeColor = Ui.Muted;
+            _infoExpander.Visible = false;
+            _lblStatus.Text = "crag info unavailable: " + ex.Message;
         }
 
         _lblStatus.Text = "loading photos…";
@@ -401,6 +509,104 @@ internal sealed class CragView : UserControl
         return rank < 0 ? int.MaxValue : rank;
     }
 
+    /// <summary>Fills the info expander from a crag-details response; hides it when there is nothing to show.</summary>
+    private void ShowInfo(CragInfo? info)
+    {
+        if (info is null)
+        {
+            _infoHeader.Text = "▍ CRAG INFO — none for this crag";
+            _infoHeader.ForeColor = Ui.Muted;
+            _infoExpander.Visible = false;
+            return;
+        }
+
+        if (info.RockType.Length > 0) _infoChips.Controls.Add(Ui.Chip(info.RockType, Ui.Accent));
+        if (info.EditDate > 0) _infoChips.Controls.Add(Ui.Chip($"updated {Jx.DateFromUnix(info.EditDate)}", Ui.Muted));
+        if (info.Parking.Count > 0)
+            _infoChips.Controls.Add(Ui.Chip($"{info.Parking.Count} parking", Ui.Muted));
+
+        string features = Jx.StripHtml(info.Features);
+        _txtFeatures.Text = features.Length > 0 ? features : "(no crag description available)";
+
+        string access = Jx.StripHtml(info.Access);
+        _txtAccess.Text = access.Length > 0 ? access : "(no access notes)";
+
+        var inPrint = info.Guidebooks.Where(g => g.InPrint).ToList();
+        var older = info.Guidebooks.Where(g => !g.InPrint).ToList();
+        if (info.Guidebooks.Count > 0)
+        {
+            string join(IEnumerable<CragGuidebook> books)
+                => string.Join(" · ", books.Select(g => g.Year > 0 ? $"{g.Name} ({g.Year})" : g.Name));
+            _lblGuides.Text = (inPrint.Count > 0
+                    ? "In print: " + join(inPrint)
+                    : "") + (older.Count > 0
+                    ? (inPrint.Count > 0 ? "  —  " : "") + $"{older.Count} out-of-print guides"
+                    : "");
+            _tips.SetToolTip(_lblGuides, string.Join("\r\n", info.Guidebooks.Select(g =>
+                $"{g.Name} ({g.Year}){(g.InPrint ? " — in print" : "")}")));
+        }
+        else
+        {
+            _lblGuides.Text = "no guidebooks listed";
+        }
+
+        if (info.Parking.Count > 0)
+            _lblParking.Text = "Parking — " + string.Join(" · ", info.Parking.Select(p => $"{p.Name} ({(p.Pay ? "pay" : "free")})"));
+
+        _txtCragComments.Text = info.Comments.Count > 0
+            ? string.Join("\r\n\r\n", info.Comments.Select(c => $"{c.Date} — {c.Who}: {c.Text}"))
+            : "no crag comments yet";
+        _cragCommentsHeader.Text = $"▍ CRAG COMMENTS ({info.Comments.Count})";
+
+        bool hasContent = features.Length > 0 || access.Length > 0 || info.Guidebooks.Count > 0
+                          || info.Comments.Count > 0 || info.Parking.Count > 0;
+        _infoHeader.Text = hasContent ? "▍ CRAG INFO — click to collapse" : "▍ CRAG INFO — none for this crag";
+        _infoHeader.ForeColor = hasContent ? Ui.Accent : Ui.Muted;
+        _infoExpanded = hasContent;
+        _infoExpander.Visible = _infoExpanded;
+    }
+
+    private void ToggleInfo()
+    {
+        if (!_infoExpander.Visible && _txtFeatures.Text.Length == 0) return; // nothing to expand
+        _infoExpanded = !_infoExpanded;
+        _infoExpander.Visible = _infoExpanded;
+        _infoHeader.Text = _infoExpanded ? "▍ CRAG INFO — click to collapse" : "▍ CRAG INFO — click to expand";
+    }
+
+    /// <summary>First named object in a crag-details response; null when the response has none.</summary>
+    internal static CragInfo? ParseCragInfo(JsonDocument doc)
+    {
+        foreach (JsonElement e in doc.RootElement.EnumerateArrayOrObjectValues())
+        {
+            if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("name", out _)) continue;
+
+            var guides = new List<CragGuidebook>();
+            if (e.TryGetProperty("guidebooks", out JsonElement gb) && gb.ValueKind == JsonValueKind.Array)
+                foreach (JsonElement g in gb.EnumerateArray())
+                    guides.Add(new CragGuidebook(g.Str("name"), g.Int("year"), g.Int("inprint") == 1));
+
+            var comments = new List<(string, string, string)>();
+            if (e.TryGetProperty("comments", out JsonElement cs) && cs.ValueKind == JsonValueKind.Array)
+                foreach (JsonElement c in cs.EnumerateArray())
+                    comments.Add((c.Str("name"), Jx.DateFromUnix(c.Long("date")), c.Str("comment")));
+
+            var parking = new List<(string, bool)>();
+            if (e.TryGetProperty("parking", out JsonElement pk) && pk.ValueKind == JsonValueKind.Array)
+                foreach (JsonElement p in pk.EnumerateArray())
+                    parking.Add((p.Str("name"), p.Int("pay") == 1));
+
+            var buttresses = new List<string>();
+            if (e.TryGetProperty("buttressdata", out JsonElement bd) && bd.ValueKind == JsonValueKind.Array)
+                foreach (JsonElement b in bd.EnumerateArray())
+                    buttresses.Add(b.Str("name"));
+
+            return new CragInfo(e.Str("name"), e.Str("rocktype"), e.Str("features"), e.Str("access"),
+                e.Int("nroutes"), e.Long("editDate"), e.Int("bmc"), guides, comments, parking, buttresses);
+        }
+        return null;
+    }
+
     internal static List<WeatherChip> FormatWeather(JsonDocument doc)
     {
         var chips = new List<WeatherChip>();
@@ -411,18 +617,41 @@ internal sealed class CragView : UserControl
             {
                 if (day.Value.ValueKind != JsonValueKind.Object || !day.Value.TryGetProperty("dly", out JsonElement dly)) continue;
                 string raw = day.Name.Length > 2 ? day.Name[2..] : day.Name; // e.g. "Sa26-10-03" -> "26-10-03"
-                chips.Add(new WeatherChip
+                var chip = new WeatherChip
                 {
                     Day = FormatDay(raw),
                     Temp = dly.Int("t"),
                     RainPct = dly.Int("cor"),
                     Wind = dly.Int("ws"),
+                    WindDeg = dly.Int("wd"),
                     Code = dly.Int("wc"),
-                });
+                };
+                if (day.Value.TryGetProperty("ast", out JsonElement ast))
+                {
+                    chip.Sunrise = ast.Str("sr");
+                    chip.Sunset = ast.Str("ss");
+                }
+                chip.Hourly = HourlyText(day.Value);
+                chips.Add(chip);
             }
             break; // one forecast area is enough for the strip
         }
         return chips;
+    }
+
+    /// <summary>Two-hourly daytime summary for the tooltip: "09:00  14°  rain 13%  wind 21 W".</summary>
+    internal static string? HourlyText(JsonElement day)
+    {
+        if (!day.TryGetProperty("hry", out JsonElement hry) || hry.ValueKind != JsonValueKind.Object)
+            return null;
+        var lines = new List<string>();
+        foreach (JsonProperty hour in hry.EnumerateObject())
+        {
+            if (!int.TryParse(hour.Name.Split(':')[0], out int h) || h is < 6 or > 20 || h % 2 != 0) continue;
+            JsonElement v = hour.Value;
+            lines.Add($"{h:00}:00  {v.Int("t"),2}°  rain {v.Int("cor"),2}%  wind {v.Int("ws")} {Jx.Compass(v.Int("wd"))}");
+        }
+        return lines.Count > 0 ? string.Join("\r\n", lines) : null;
     }
 
     /// <summary>"26-10-03" -> "Sat 3 Oct" (or "Today"); falls back to the raw string.</summary>
@@ -432,18 +661,30 @@ internal sealed class CragView : UserControl
             : raw;
 }
 
+/// <summary>Typed view of one crag-details entry (logbook/v1/crag_ukc/{id}).</summary>
+internal sealed record CragGuidebook(string Name, int Year, bool InPrint);
+
+internal sealed record CragInfo(
+    string Name, string RockType, string Features, string Access, int NRoutes, long EditDate, int BmcId,
+    IReadOnlyList<CragGuidebook> Guidebooks,
+    IReadOnlyList<(string Who, string Date, string Text)> Comments,
+    IReadOnlyList<(string Name, bool Pay)> Parking,
+    IReadOnlyList<string> Buttresses);
+
 /// <summary>One painted weather-day card.</summary>
 internal sealed class WeatherChip : Control
 {
     private static readonly SolidBrush CardFill = new(Ui.CardSoft);
 
     public string Day = "";
-    public int Temp, RainPct, Wind, Code;
+    public int Temp, RainPct, Wind, WindDeg, Code;
+    public string Sunrise = "", Sunset = "";
+    public string? Hourly;
 
     public WeatherChip()
     {
-        Size = new Size(100, 72);
-        BackColor = Ui.Bg; // corners outside the rounded card show the page
+        Size = new Size(104, 80);
+        BackColor = Ui.Bg; // corners outside the flat tile show the page
         Margin = new Padding(0, 0, 6, 0);
         DoubleBuffered = true;
         ResizeRedraw = true;
@@ -469,12 +710,15 @@ internal sealed class WeatherChip : Control
         Graphics g = e.Graphics;
         g.FillRectangle(CardFill, ClientRectangle); // plain flat tile — no border, no rounding
 
-        TextRenderer.DrawText(g, Day, Ui.BodyBold, new Point(10, 7), Ui.Accent);
+        TextRenderer.DrawText(g, Day, Ui.BodyBold, new Point(10, 5), Ui.Accent);
         Color tempInk = Temp >= 18 ? Ui.Amber : Temp <= 4 ? Ui.Accent : Ui.Text;
-        TextRenderer.DrawText(g, $"{Temp}\u00b0", Ui.MonoBig, new Point(8, 22), tempInk);
-        TextRenderer.DrawText(g, $"{RainPct}% rain", Ui.Tiny, new Point(10, 47),
+        TextRenderer.DrawText(g, $"{Temp}\u00b0", Ui.MonoBig, new Point(8, 19), tempInk);
+        TextRenderer.DrawText(g, $"{RainPct}% rain", Ui.Tiny, new Point(10, 45),
             RainPct >= 60 ? Ui.Accent : Ui.Muted, TextFormatFlags.EndEllipsis);
-        TextRenderer.DrawText(g, $"{CodeText(Code)} \u00b7 wind {Wind}", Ui.Tiny, new Point(10, 58),
+        TextRenderer.DrawText(g, $"{CodeText(Code)} \u00b7 wind {Wind} {Jx.Compass(WindDeg)}", Ui.Tiny, new Point(10, 56),
             Ui.Muted, TextFormatFlags.EndEllipsis);
+        if (Sunrise.Length > 0 || Sunset.Length > 0)
+            TextRenderer.DrawText(g, $"\u2191{Sunrise}  \u2193{Sunset}", Ui.Tiny, new Point(10, 67),
+                Ui.Muted, TextFormatFlags.EndEllipsis);
     }
 }

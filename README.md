@@ -194,12 +194,17 @@ drive it headlessly for captures):
   full-size lightbox; `←`/`→` or the wheel steps through the strip; thumbnails
   fall back to full images when the CDN lacks a t_300h variant). "on UKC" opens the
   crag on ukclimbing.com.
-- **Crag pages** — clickable grade-band chips (Mod-VD / S-HS / VS-HVS / E1+) that
-  filter the buttress-grouped route list, a "jump to buttress" dropdown on
-  multi-buttress crags, and a sortable routes table: click a column header for
-  ascending, again for descending (▲/▼ shown), a third time to return to buttress
-  grouping; grades sort by difficulty (M → E-grades → sport), not alphabetically.
-  Plus a seven-day weather card strip, crag photos, and an "on UKC" link.
+- **Crag pages** — a collapsible **CRAG INFO** block with everything the crag-details
+  endpoint returns: the crag description, access & conservation notes, rock type,
+  in-print/out-of-print guidebooks (full list on hover), parking (free/pay), and
+  the crag comments thread. The title row shows the crag's county (areaName).
+  Below it: clickable grade-band chips (Mod-VD / S-HS / VS-HVS / E1+) that filter
+  the buttress-grouped route list, a "jump to buttress" dropdown on multi-buttress
+  crags, and a sortable routes table — click a column header for ascending, again
+  for descending (▲/▼ shown), a third time to return to buttress grouping; grades
+  sort by difficulty (M → E-grades → sport), not alphabetically. Plus a seven-day
+  weather strip (each tile shows sunrise/sunset and wind with a compass bearing;
+  hover for a two-hourly daytime forecast), crag photos, and an "on UKC" link.
 - **Crag map** — every UKC crag plotted over a real **OpenStreetMap basemap**
   (standard OSM raster tiles, remapped to a dark slate so they fit the app;
   Web Mercator slippy-map projection with an LRU tile cache). Pannable and
@@ -209,9 +214,16 @@ drive it headlessly for captures):
 - **Search & lists** — route search (Enter), crag filter, busiest-crags, free crags.
 - **Logbook** — sign in with your UKClimbing account for your ascents (UKC style
   names decoded, **climbing partners resolved to names and filterable via the
-  partners dropdown**, CSV export) with a live filter box, and your wishlist (grade/id columns, deleted entries skipped);
-  double-click any ascent or wishlist entry to open the route.
+  partners dropdown**, CSV export) with a live filter box, and your wishlist (grade/id columns, deleted entries skipped).
+  Ascents and wishlist rows are cross-linked with `logbook_route_details` so each
+  route knows its crag — the route page's "open crag" works from logbook entries.
+  Double-click any ascent or wishlist entry to open the route.
 - **Top 10** — the weekly photo grid with rank badges and ratings, refreshable.
+- **Services** — the UKC listings directory (`listings/v1/free`): ~3,400 shops,
+  gear shops, courses/instructors, clubs, walls and places to stay, filterable by
+  type and free text (name or place); the detail pane shows address, phone, email,
+  website, opening hours and notes, and double-click opens the website. Fetched
+  once per run.
 - **Shell** — hover-highlighted lists, a loading spinner in the status bar, buttons
   lock while a request is in flight, failures render in red until the next success,
   window/splitter/map geometry and your last search persist across runs, right-click
@@ -224,7 +236,7 @@ drive it headlessly for captures):
 - **Recents** — routes and crags you open are remembered (newest first, capped at 20,
   stored only in `%LOCALAPPDATA%\RockfaxDesk\session.json`); on the next launch the
   rail offers them so you can pick up where you left off.
-- Keyboard: **Ctrl+F** focuses search, **Ctrl+1–5** switches tabs, **Enter**
+- Keyboard: **Ctrl+F** focuses search, **Ctrl+1–6** switches tabs, **Enter**
   searches/opens, **Esc** clears, **F5** refreshes the current route/crag/list,
   and the map (once clicked) pans with the **arrow keys**, zooms with **+/−**
   and resets with **Home**.
@@ -235,13 +247,18 @@ dotnet run --project RockfaxDesk -- --self-test   # headless end-to-end check ag
 ```
 
 The self-test exercises every data path the UI uses (search, route info, comments,
-crag routes, weather, photo metadata, a CDN thumbnail download, top-10, form construction).
+crag routes, crag details, weather, photo metadata, a CDN thumbnail download,
+top-10, the listings directory, form construction).
 
 Console demo (`RockfaxApi.Demo`):
 
 ```
 dotnet run --project RockfaxApi.Demo -- free-crags
 dotnet run --project RockfaxApi.Demo -- route-info 52150
+dotnet run --project RockfaxApi.Demo -- crag-details ukc 104        # crag description/access/guidebooks/parking
+dotnet run --project RockfaxApi.Demo -- crag-routes 104
+dotnet run --project RockfaxApi.Demo -- weather ukc 104
+dotnet run --project RockfaxApi.Demo -- listings
 dotnet run --project RockfaxApi.Demo -- login you@example.com password
 ```
 
@@ -253,10 +270,11 @@ dotnet build RockfaxApi.csproj    # library, net10.0, no NuGet dependencies
 
 ## Tests
 
-60 offline unit tests pin the wire protocol (signing vectors — including the
+99 offline unit tests pin the wire protocol (signing vectors — including the
 live-verified freeCrags key — URL building, search encoding), the JSON helpers,
-grade filtering, CSV export escaping, the map projection math, and the OSM tile
-darkening. No network needed; they run in ~150 ms:
+grade filtering, CSV export escaping, the map projection math, the OSM tile
+darkening, crag-details/weather/listings parsing, and HTML-entity stripping for
+the crag descriptions. No network needed; they run in ~150 ms:
 
 ```
 dotnet test RockfaxApi.Tests/RockfaxApi.Tests.csproj
