@@ -44,7 +44,7 @@ public sealed class MainForm : Form
     private readonly LogbookView _logbookView = new();
     private readonly Top10View _top10View = new();
     private readonly TabStrip _tabs = new();
-    private SplitContainer _contentSplit;
+    private SplitContainer? _contentSplit;
 
     private readonly Label _spinLabel = new()
     {
@@ -182,8 +182,8 @@ public sealed class MainForm : Form
     protected override async void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        // SplitterDistance is only reliable once the container has a real size.
-        _contentSplit.SplitterDistance = 390;
+        // SplitterDistance is only reliable once the container has a real size; the
+        // restored value is applied at the end of OnShown (after layout settles).
 
         // Warm the crag cache so the map/crag lists feel instant.
         try
@@ -209,6 +209,16 @@ public sealed class MainForm : Form
                 await OpenCragAsync(cragId, "");
         if (args.Contains("--top10")) { _tabs.Select(4); await _top10View.LoadAsync(); }
         // (hooks above are used by the screenshot harness: shot.ps1)
+
+        // Apply the persisted splitter width now that the layout has real sizes.
+        // Min sizes keep the rail usable no matter what was saved or dragged.
+        if (_contentSplit is { } split)
+        {
+            split.Panel1MinSize = 250;
+            split.Panel2MinSize = 480;
+            try { split.SplitterDistance = Math.Clamp(_restoreSplitter, split.Panel1MinSize, split.Width - split.Panel2MinSize); }
+            catch { split.SplitterDistance = 390; }
+        }
         _lblStatus.Text = "ready — Ctrl+F to search";
     }
 
@@ -231,6 +241,7 @@ public sealed class MainForm : Form
     {
         try
         {
+            if (_contentSplit is null) return;
             Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
             if (bounds.Width < MinimumSize.Width) return;
             (float mz, float mx, float my) = _map.GetView();

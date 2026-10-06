@@ -188,7 +188,7 @@ internal sealed class UiList : ListView
         View = View.Details;
         OwnerDraw = true;
         DrawColumnHeader += DrawHeader;
-        DrawSubItem += DrawItem;
+        DrawSubItem += DrawSubItemRow;
         Resize += (_, _) => StretchLastColumn();
         DarkScroll.Apply(this);
         ColumnClick += OnColumnClicked;
@@ -264,8 +264,8 @@ internal sealed class UiList : ListView
         g.FillRectangle(bg, e.Bounds);
         using var under = new Pen(Ui.AccentDim);
         g.DrawLine(under, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
-        string label = e.Header.Text;
-        var list = (UiList)sender!;
+        string label = e.Header?.Text ?? "";
+        if (sender is not UiList list) return;
         if (list.ColumnSorting && e.ColumnIndex == list._sortColumn)
             label += list._sortDesc ? " ▼" : " ▲";
         TextRenderer.DrawText(g, label, Ui.BodyBold,
@@ -281,8 +281,9 @@ internal sealed class UiList : ListView
 
     public int HoverRow => _hoverRow;
 
-    private void DrawItem(object? sender, DrawListViewSubItemEventArgs e)
+    private void DrawSubItemRow(object? sender, DrawListViewSubItemEventArgs e)
     {
+        if (e.Item is null) return;
         bool selected = e.Item.Selected;
         Color bg = selected ? Ui.Selection
             : e.ItemIndex == _hoverRow ? Color.FromArgb(34, 48, 74)
