@@ -141,7 +141,7 @@ internal sealed class RouteView : UserControl
             _txtDescription.Text =
                 $"First ascent: {info.FirstAscent} {info.FirstAscentDate}\r\n" +
                 $"Height: {info.Height} m    Pitches: {info.Pitches}\r\n\r\n" +
-                (info.Description.Length > 0 ? info.Description + "\r\n" : "") +
+                (info.Description.Length > 0 ? info.Description + "\r\n" : "(no description on UKC)\r\n") +
                 (info.RockfaxDescription.Length > 0 ? "\r\n— Rockfax —\r\n" + info.RockfaxDescription : "");
         }
         catch (Exception ex)
@@ -162,6 +162,7 @@ internal sealed class RouteView : UserControl
             }
             if (_lvComments.Items.Count == 0)
                 _lvComments.Items.Add(new ListViewItem("—") { SubItems = { "", "no comments yet" } });
+            _lvComments.StretchLastColumn();
         }
         catch (Exception ex)
         {

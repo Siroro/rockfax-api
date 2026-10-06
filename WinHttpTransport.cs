@@ -193,6 +193,7 @@ public sealed class WinHttpTransport : HttpMessageHandler
         int rawSize = 0;
         WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_RAW_HEADERS_CRLF, IntPtr.Zero, null, ref rawSize, IntPtr.Zero);
         var response = new HttpResponseMessage((HttpStatusCode)statusCode) { RequestMessage = request };
+        int? expectedLength = null;
         if (rawSize > 0)
         {
             byte[] rawBuffer = new byte[rawSize];
@@ -206,8 +207,12 @@ public sealed class WinHttpTransport : HttpMessageHandler
                     if (colon <= 0) continue;
                     string name = trimmed[..colon].Trim();
                     string value = trimmed[(colon + 1)..].Trim();
-                    if (name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase) ||
-                        name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (int.TryParse(value, out int len) && len >= 0) expectedLength = len;
+                        continue; // managed by the content itself
+                    }
+                    if (name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)) continue;
                     if (!response.Headers.TryAddWithoutValidation(name, value))
                         response.Content.Headers.TryAddWithoutValidation(name, value);
                 }
@@ -228,7 +233,13 @@ public sealed class WinHttpTransport : HttpMessageHandler
                 totalRead += read;
             }
         }
-        response.Content = new ByteArrayContent(body.ToArray());
+        byte[] bodyBytes = body.ToArray();
+        // A connection dropped mid-body yields a truncated payload (GDI+ later reports it
+        // as an invalid image, JSON parsers choke, …). Fail loudly so callers can retry.
+        if (expectedLength is int expected && bodyBytes.Length != expected)
+            throw new RockfaxApiException(
+                $"Response truncated: got {bodyBytes.Length} of {expected} bytes.", response.StatusCode, null);
+        response.Content = new ByteArrayContent(bodyBytes);
         return response;
     }
 

@@ -61,7 +61,7 @@ internal sealed class Top10View : UserControl
         }
         catch (Exception ex)
         {
-            _lblStatus.Text = "unavailable: " + ex.Message;
+            _lblStatus.Text = $"unavailable: {ex.GetType().Name} — {ex.Message}";
         }
     }
 

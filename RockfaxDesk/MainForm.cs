@@ -163,6 +163,10 @@ public sealed class MainForm : Form
                 await SearchAsync(Uri.UnescapeDataString(arg[9..]));
         }
         if (args.Contains("--freecrags")) await LoadFreeCragsAsync();
+        foreach (string arg in args)
+            if (arg.StartsWith("--crag=", StringComparison.Ordinal) && int.TryParse(arg[7..], out int cragId))
+                await OpenCragAsync(cragId, "");
+        if (args.Contains("--top10")) { _tabs.Select(4); await _top10View.LoadAsync(); }
         Text = $"Rockfax Explorer — unofficial UKClimbing client  [tab {_tabs.SelectedIndex}]";
     }
 
@@ -297,7 +301,7 @@ public sealed class MainForm : Form
     private async Task RunSafe(Func<Task> work)
     {
         try { await work(); }
-        catch (Exception ex) { _lblStatus.Text = $"failed: {ex.Message}"; }
+        catch (Exception ex) { _lblStatus.Text = $"failed: {ex.GetType().Name} — {ex.Message}"; }
     }
 
     private async Task RunAsync(string what, Func<Task> work)
@@ -310,7 +314,7 @@ public sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            _lblStatus.Text = $"{what} — failed: {ex.Message}";
+            _lblStatus.Text = $"{what} — failed: {ex.GetType().Name}: {ex.Message}";
         }
     }
 
@@ -381,13 +385,17 @@ public sealed class MainForm : Form
         var points = new List<CragPoint>();
         foreach (JsonElement marker in doc.RootElement.GetProperty("markers").EnumerateArray())
         {
+            double lat = marker.Dbl("lat"), lng = marker.Dbl("lng");
+            int nRoutes = marker.Int("nroutes");
+            // Skip bad rows: swapped/garbage coordinates and int16-max route counts.
+            if (lat is < 30 or > 70 || lng is < -30 or > 40 || nRoutes is <= 0 or > 5000) continue;
             points.Add(new CragPoint
             {
-                Lat = (float)marker.Dbl("lat"),
-                Lng = (float)marker.Dbl("lng"),
+                Lat = (float)lat,
+                Lng = (float)lng,
                 UkcId = marker.Int("id"),
                 RockfaxId = marker.Int("rockfaxID"),
-                NRoutes = marker.Int("nroutes"),
+                NRoutes = nRoutes,
                 Title = marker.Str("title"),
             });
         }

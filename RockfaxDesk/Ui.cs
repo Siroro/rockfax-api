@@ -154,6 +154,7 @@ internal sealed class UiList : ListView
 
     public UiList()
     {
+        Dock = DockStyle.Fill; // every list in the app fills its host
         BackColor = Ui.Panel;
         ForeColor = Ui.Text;
         BorderStyle = BorderStyle.None;

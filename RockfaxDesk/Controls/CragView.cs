@@ -111,32 +111,54 @@ internal sealed class CragView : UserControl
         try
         {
             using JsonDocument doc = await _api.GetCragRoutesAsync(ukcCragId);
-            foreach (JsonProperty cragEntry in doc.RootElement.EnumerateObject())
-            {
-                JsonElement crag = cragEntry.Value;
-                if (crag.ValueKind != JsonValueKind.Object) continue;
-                if (cragName.Length == 0) cragName = crag.Str("name");
-                _lblTitle.Text = cragName.Length > 0 ? cragName : $"Crag {ukcCragId}";
+            JsonElement root = doc.RootElement;
 
-                if (crag.TryGetProperty("grades", out JsonElement grades) && grades.ValueKind == JsonValueKind.Array)
+            // Response shape: { "routes": [ {name, grade, ukcID, buttress, ...} ],
+            //                   "crags":  { "<id>": { name, gradeColors: [4], areaName } } }
+            if (root.TryGetProperty("crags", out JsonElement crags))
+            {
+                foreach (JsonProperty cragEntry in crags.EnumerateObject())
                 {
-                    int[] g = grades.EnumerateArray().Select(x => x.GetInt32()).ToArray();
-                    if (g.Length >= 4)
+                    JsonElement crag = cragEntry.Value;
+                    if (crag.ValueKind != JsonValueKind.Object) continue;
+                    if (cragName.Length == 0) cragName = crag.Str("name");
+
+                    if (crag.TryGetProperty("gradeColors", out JsonElement grades) && grades.ValueKind == JsonValueKind.Array)
                     {
-                        _grades.Controls.Add(Ui.Chip($"{g[0]}  Mod–VD", Ui.Green));
-                        _grades.Controls.Add(Ui.Chip($"{g[1]}  S–HS", Ui.Amber));
-                        _grades.Controls.Add(Ui.Chip($"{g[2]}  VS–HVS", Color.FromArgb(251, 146, 60)));
-                        _grades.Controls.Add(Ui.Chip($"{g[3]}  E1+", Ui.Red));
+                        int[] g = grades.EnumerateArray().Select(x => x.GetInt32()).ToArray();
+                        if (g.Length >= 4)
+                        {
+                            _grades.Controls.Add(Ui.Chip($"{g[0]}  Mod-VD", Ui.Green));
+                            _grades.Controls.Add(Ui.Chip($"{g[1]}  S-HS", Ui.Amber));
+                            _grades.Controls.Add(Ui.Chip($"{g[2]}  VS-HVS", Color.FromArgb(251, 146, 60)));
+                            _grades.Controls.Add(Ui.Chip($"{g[3]}  E1+", Ui.Red));
+                        }
                     }
                 }
+            }
+            _lblTitle.Text = cragName.Length > 0 ? cragName : $"Crag {ukcCragId}";
 
-                foreach (JsonElement route in RoutesOf(crag))
+            if (root.TryGetProperty("routes", out JsonElement routes) && routes.ValueKind == JsonValueKind.Array)
+            {
+                _lvRoutes.Groups.Clear();
+                var groups = new Dictionary<string, ListViewGroup>();
+                foreach (JsonElement route in routes.EnumerateArray())
                 {
                     var summary = new RouteSummary(
                         route.Str("name"), route.Str("grade"), route.Str("techGrade"), route.Int("stars"),
-                        cragName, route.Int("ukcID"), route.Int("rockfaxID"), int.TryParse(cragEntry.Name, out int id) ? id : ukcCragId);
+                        cragName, route.Int("ukcID"), route.Int("rockfaxID"), ukcCragId);
                     if (summary.UkcId == 0 && summary.RockfaxId == 0) continue;
-                    var item = new ListViewItem(summary.Name);
+
+                    string buttress = route.Str("buttress");
+                    if (buttress.Length == 0) buttress = "General";
+                    if (!groups.TryGetValue(buttress, out ListViewGroup? group))
+                    {
+                        group = new ListViewGroup(buttress);
+                        groups[buttress] = group;
+                        _lvRoutes.Groups.Add(group);
+                    }
+
+                    var item = new ListViewItem(summary.Name, group);
                     item.SubItems.Add(summary.Grade);
                     item.SubItems.Add(summary.TechGrade);
                     item.SubItems.Add(Jx.Stars(summary.Stars));
@@ -144,7 +166,9 @@ internal sealed class CragView : UserControl
                     item.Tag = summary;
                     _lvRoutes.Items.Add(item);
                 }
+                _lvRoutes.ShowGroups = true;
             }
+            _lvRoutes.StretchLastColumn();
         }
         catch (Exception ex)
         {
@@ -183,14 +207,6 @@ internal sealed class CragView : UserControl
         _lblStatus.Text = _lvRoutes.Items.Count > 0
             ? $"{_lvRoutes.Items.Count} routes — double-click for route details" + (shown > 0 ? $"  ·  {shown} photos" : "")
             : "no routes listed";
-    }
-
-    private static IEnumerable<JsonElement> RoutesOf(JsonElement crag)
-    {
-        if (crag.TryGetProperty("routes", out JsonElement routes))
-        {
-            foreach (JsonElement route in routes.EnumerateArrayOrObjectValues()) yield return route;
-        }
     }
 
     internal static List<WeatherChip> FormatWeather(JsonDocument doc)

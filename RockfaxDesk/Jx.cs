@@ -8,7 +8,10 @@ internal static class Jx
         => e.TryGetProperty(prop, out JsonElement v) && v.ValueKind != JsonValueKind.Null ? v.ToString() : "";
 
     internal static int Int(this JsonElement e, string prop)
-        => e.TryGetProperty(prop, out JsonElement v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0;
+    {
+        if (!e.TryGetProperty(prop, out JsonElement v) || v.ValueKind != JsonValueKind.Number) return 0;
+        return v.TryGetInt32(out int i) ? i : (int)v.GetDouble(); // ratings arrive fractional
+    }
 
     internal static double Dbl(this JsonElement e, string prop)
         => e.TryGetProperty(prop, out JsonElement v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;

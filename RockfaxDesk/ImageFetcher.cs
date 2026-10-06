@@ -6,7 +6,9 @@ namespace RockfaxDesk;
 
 /// <summary>
 /// Loads photos from the UKC CDN (cdn.ukc2.com), over the same WinHTTP transport as the
-/// API client. Thumbnail cache with a hard cap to keep memory bounded.
+/// API client. Thumbnail cache with a hard cap to keep memory bounded. Some photos have
+/// no t_300h variant on the CDN (weekly top-10 entries, for instance) — those fall back
+/// to the full-size image, downscaled locally.
 /// </summary>
 internal sealed class ImageFetcher : IDisposable
 {
@@ -29,7 +31,8 @@ internal sealed class ImageFetcher : IDisposable
             if (_thumbCache.TryGetValue(photoId, out Image? cached)) return cached;
         }
 
-        Image? image = await LoadAsync(ThumbBase + photoId + ".jpg").ConfigureAwait(false);
+        Image? image = await LoadAsync(ThumbBase + photoId + ".jpg").ConfigureAwait(false)
+                       ?? await LoadAsync(FullBase + photoId + ".jpg", downscaleTo: 300).ConfigureAwait(false);
         if (image is null) return null;
 
         lock (_thumbCache)
@@ -48,21 +51,32 @@ internal sealed class ImageFetcher : IDisposable
     public Task<Image?> GetFullAsync(int photoId)
         => LoadAsync(FullBase + photoId + ".jpg");
 
-    private async Task<Image?> LoadAsync(string url)
+    private async Task<Image?> LoadAsync(string url, int? downscaleTo = null)
     {
-        try
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            using HttpResponseMessage response = await _http.GetAsync(url).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            byte[] bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-            using var ms = new MemoryStream(bytes);
-            using Image raw = Image.FromStream(ms);
-            return new Bitmap(raw); // detach from the stream
+            try
+            {
+                using HttpResponseMessage response = await _http.GetAsync(url).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode) return null;
+                byte[] bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                using var ms = new MemoryStream(bytes);
+                using Image raw = Image.FromStream(ms);
+                if (downscaleTo is int target && raw.Height > target)
+                {
+                    int w = raw.Width * target / raw.Height;
+                    var small = new Bitmap(raw, w, target);
+                    return small;
+                }
+                return new Bitmap(raw); // detach from the stream
+            }
+            catch
+            {
+                if (attempt == 1) return null; // one retry for transient connection drops
+                await Task.Delay(300).ConfigureAwait(false);
+            }
         }
-        catch
-        {
-            return null;
-        }
+        return null;
     }
 
     public void Dispose() => _http.Dispose();

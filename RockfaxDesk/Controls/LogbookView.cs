@@ -87,6 +87,7 @@ internal sealed class LogbookView : UserControl
                 total++;
             }
             _lblStatus.Text = $"{total} ascents" + (deleted > 0 ? $"  ·  {deleted} deleted entries skipped" : "") + "  ·  double-click to open the route";
+            _lvAscents.StretchLastColumn();
         }
         catch (Exception ex)
         {
@@ -105,6 +106,7 @@ internal sealed class LogbookView : UserControl
                 count++;
             }
             _lblWishlist.Text = $"▍ WISHLIST ({count})";
+            _lvWishlist.StretchLastColumn();
         }
         catch
         {
