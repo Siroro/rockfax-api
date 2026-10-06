@@ -444,6 +444,7 @@ public sealed class MainForm : Form
     private Task SearchAsync(string query)
         => RunSafe(async () =>
         {
+            if (_busy > 0) { _lblStatus.Text = "busy — wait for the current request"; return; }
             if (query.Trim().Length < 3) { _lblStatus.Text = "type at least 3 characters"; return; }
             _lblStatus.Text = $"searching “{query}”…";
             using JsonDocument doc = await _api.SearchRoutesAsync(query);
@@ -487,6 +488,7 @@ public sealed class MainForm : Form
     private Task ReloadCurrentAsync()
         => RunAsync("refreshing", async () =>
         {
+            if (_busy > 1) { _lblStatus.Text = "busy — wait for the current request"; return; }
             if (_tabs.SelectedIndex == 0 && _lastRoute is not null) { await _routeView.ShowRouteAsync(_lastRoute); _lblStatus.Text = $"route: {_lastRoute.Name}"; }
             else if (_tabs.SelectedIndex == 1 && _lastCrag is not null) { await _cragView.ShowCragAsync(_lastCrag.Value.Id, _lastCrag.Value.Name); _lblStatus.Text = $"crag: {_lastCrag.Value.Name}"; }
             else if (_tabs.SelectedIndex == 4) { await _top10View.LoadAsync(); }
@@ -563,6 +565,7 @@ public sealed class MainForm : Form
     private Task CragFilterAsync(string filter)
         => RunAsync($"crags matching “{filter}”", async () =>
         {
+            if (_busy > 0) { _lblStatus.Text = "busy — wait for the current request"; return; }
             List<CragPoint> points = await EnsureCragPointsAsync();
             SetLeftItems(points
                 .Where(p => p.Title.Contains(filter, StringComparison.OrdinalIgnoreCase))

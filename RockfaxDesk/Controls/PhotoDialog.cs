@@ -81,6 +81,11 @@ internal sealed class PhotoDialog : Form
         _current = full;
         _box.Image = full;
         old?.Dispose();
+
+        // Prefetch the neighbours so stepping feels instant.
+        int after = _index + 1, before = _index - 1;
+        if (after < _photos.Count) { int id2 = _photos[after].Id; _ = Task.Run(() => _images.GetFullAsync(id2)); }
+        if (before >= 0) { int id3 = _photos[before].Id; _ = Task.Run(() => _images.GetFullAsync(id3)); }
     }
 
     public static async Task ShowAsync(ImageFetcher images, IReadOnlyList<(int Id, string Title, string Author)> photos, int index)
