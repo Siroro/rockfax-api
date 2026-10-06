@@ -32,6 +32,8 @@ internal sealed class CragMapCanvas : Control
     private PointF _panStart;
     private CragPoint? _hover;
     private CragPoint? _selected;
+    private int _clusterCount;
+    private Point _hoverPoint;
 
     private const double LatKm = 111.0;          // km per degree of latitude
     private const double LngKm = 111.0 * 0.5878; // cos(54°) — mid-Britain squeeze
@@ -173,6 +175,21 @@ internal sealed class CragMapCanvas : Control
 
     private void DrawHoverAndSelection(Graphics g)
     {
+        // Zoomed-out dense area: no single dot under the cursor but several nearby —
+        // show a cluster count instead of one name.
+        if (_hover is null && _clusterCount > 1)
+        {
+            string label = $"{_clusterCount} crags in this area — zoom in";
+            SizeF size = TextRenderer.MeasureText(label, Ui.BodyBold);
+            var box = new Rectangle(_hoverPoint.X + 12, _hoverPoint.Y - 11, (int)size.Width + 12, (int)size.Height + 6);
+            using (var back = new SolidBrush(Color.FromArgb(216, 10, 16, 30)))
+                g.FillRectangle(back, box);
+            using (var edge = new Pen(Ui.Border))
+                g.DrawRectangle(edge, box);
+            TextRenderer.DrawText(g, label, Ui.BodyBold, new Point(box.X + 6, box.Y + 3), Ui.Text);
+            return;
+        }
+
         foreach ((CragPoint? p, bool strong) in new[] { (_hover, false), (_selected, true) })
         {
             if (p is null) continue;
@@ -271,7 +288,9 @@ internal sealed class CragMapCanvas : Control
         else
         {
             CragPoint? nearest = InZoomArea(e.Location) ? null : Nearest(e.Location, 10);
-            if (!ReferenceEquals(nearest, _hover))
+            _hoverPoint = e.Location;
+            _clusterCount = nearest is null ? ClusterAt(e.Location, 22) : 0;
+            if (!ReferenceEquals(nearest, _hover) || _clusterCount > 1)
             {
                 _hover = nearest;
                 Cursor = InZoomArea(e.Location) ? Cursors.Default : Cursors.Hand;
@@ -321,6 +340,19 @@ internal sealed class CragMapCanvas : Control
         (float ax, float ay) = ScreenToMap(anchor);
         _pan = new PointF(_pan.X + (ax - bx), _pan.Y + (ay - by)); // keep the anchored point fixed
         Invalidate();
+    }
+
+    /// <summary>How many crags sit within `radius` px of the point (zoomed-out dense areas).</summary>
+    internal int ClusterAt(Point location, int radius)
+    {
+        int count = 0;
+        foreach (CragPoint p in _points)
+        {
+            (float x, float y) = Project(p);
+            double d = (x - location.X) * (x - location.X) + (y - location.Y) * (y - location.Y);
+            if (d <= radius * radius) count++;
+        }
+        return count;
     }
 
     private CragPoint? Nearest(Point location, int radius)

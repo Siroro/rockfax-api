@@ -32,6 +32,18 @@ internal static class Jx
     internal static long Long(this JsonElement e, string prop)
         => e.TryGetProperty(prop, out JsonElement v) && v.ValueKind == JsonValueKind.Number ? v.GetInt64() : 0;
 
+    /// <summary>Reads a JSON array of numbers into a list of ints (missing/empty = empty list).</summary>
+    internal static List<int> IntList(this JsonElement e, string prop)
+    {
+        var result = new List<int>();
+        if (e.TryGetProperty(prop, out JsonElement v) && v.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement item in v.EnumerateArray())
+                if (item.ValueKind == JsonValueKind.Number && item.TryGetInt32(out int i)) result.Add(i);
+        }
+        return result;
+    }
+
     /// <summary>Enumerates an array's elements, or an object's property values — whichever this element holds.</summary>
     internal static IEnumerable<JsonElement> EnumerateArrayOrObjectValues(this JsonElement e)
     {

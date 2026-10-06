@@ -19,6 +19,7 @@ internal sealed class LogbookView : UserControl
     public event Action<RouteSummary>? RouteRequested;
 
     private readonly List<ListViewItem> _allAscents = new();
+    private readonly Dictionary<int, string> _partnerNames = new();
 
     private void ApplyFilter()
     {
@@ -43,11 +44,12 @@ internal sealed class LogbookView : UserControl
         BackColor = Ui.Bg;
 
         _lvAscents.Columns.Add("Date", 92);
-        _lvAscents.Columns.Add("Route", 250);
-        _lvAscents.Columns.Add("Grade", 70);
-        _lvAscents.Columns.Add("Crag", 210);
-        _lvAscents.Columns.Add("Style", 200);
-        _lvAscents.Columns.Add("Notes", 420);
+        _lvAscents.Columns.Add("Route", 240);
+        _lvAscents.Columns.Add("Grade", 66);
+        _lvAscents.Columns.Add("Crag", 180);
+        _lvAscents.Columns.Add("Style", 150);
+        _lvAscents.Columns.Add("Partners", 170);
+        _lvAscents.Columns.Add("Notes", 330);
         _lvAscents.ColumnInk[2] = Ui.Amber;
         _lvAscents.ColumnInk[4] = Ui.Accent;
         _lvWishlist.Columns.Add("Route", 280);
@@ -114,7 +116,7 @@ internal sealed class LogbookView : UserControl
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            var lines = new List<string> { "date,route,grade,crag,style,notes" };
+            var lines = new List<string> { "date,route,grade,crag,style,partners,notes" };
             foreach (ListViewItem item in _lvAscents.Items)
             {
                 string[] cols = item.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => s.Text).ToArray();
@@ -140,8 +142,28 @@ internal sealed class LogbookView : UserControl
 
         _lblStatus.Text = $"loading logbook for {api.Username}…";
         _allAscents.Clear();
+        _partnerNames.Clear();
         _lvAscents.Items.Clear();
         _lvWishlist.Items.Clear();
+
+        // Partner ids in ascents resolve against the user's partners list.
+        try
+        {
+            using JsonDocument partnersDoc = await api.GetPartnersAsync(api.UserId);
+            // Response shape: { "partners": [ { id, name, userID, ... } ] }
+            JsonElement container =
+                partnersDoc.RootElement.TryGetProperty("partners", out JsonElement arr) && arr.ValueKind == JsonValueKind.Array
+                    ? arr
+                    : partnersDoc.RootElement;
+            foreach (JsonElement partner in container.EnumerateArrayOrObjectValues())
+            {
+                if (partner.ValueKind != JsonValueKind.Object) continue;
+                int pid = partner.Int("id");
+                string name = partner.Str("name");
+                if (pid > 0 && name.Length > 0) _partnerNames[pid] = name;
+            }
+        }
+        catch { /* partners are decoration; ascents still load */ }
         try
         {
             using JsonDocument doc = await api.GetLogbookAsync(api.UserId);
@@ -149,11 +171,14 @@ internal sealed class LogbookView : UserControl
             foreach (JsonElement ascent in FindAscents(doc.RootElement))
             {
                 if (ascent.Int("trash") == 1) { deleted++; continue; }
+                string partners = string.Join(", ", ascent.IntList("partners").Select(pid =>
+                    _partnerNames.TryGetValue(pid, out string? name) ? name : $"#{pid}"));
                 var item = new ListViewItem(ascent.Str("textAscentDate"));
                 item.SubItems.Add(ascent.Str("name"));
                 item.SubItems.Add(ascent.Str("grade"));
                 item.SubItems.Add(ascent.Str("crag"));
                 item.SubItems.Add(Jx.StyleName(ascent.Int("style")));
+                item.SubItems.Add(partners);
                 item.SubItems.Add(ascent.Str("comment"));
                 item.Tag = new RouteSummary(ascent.Str("name"), ascent.Str("grade"), "", 0, ascent.Str("crag"),
                                             ascent.Int("ukcID"), ascent.Int("rockfaxID"), 0);
