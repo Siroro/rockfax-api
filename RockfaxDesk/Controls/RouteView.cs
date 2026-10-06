@@ -4,52 +4,33 @@ using RockfaxApi;
 
 namespace RockfaxDesk.Controls;
 
-/// <summary>Everything about one route: header, description/FA, comments, photo strip.</summary>
+/// <summary>Everything about one route: header chips, description/FA, comments, photo strip.</summary>
 internal sealed class RouteView : UserControl
 {
-    private readonly Label _lblTitle = new()
-    {
-        Dock = DockStyle.Top, Height = 34, Font = new Font("Segoe UI Semibold", 15f),
-        ForeColor = Color.FromArgb(235, 245, 255), Padding = new Padding(8, 4, 0, 0),
-    };
-    private readonly Label _lblSub = new()
-    {
-        Dock = DockStyle.Top, Height = 24, Font = new Font("Segoe UI", 9.75f),
-        ForeColor = Color.FromArgb(150, 200, 240), Padding = new Padding(10, 0, 0, 0),
-    };
-    private readonly LinkLabel _lnkCrag = new()
-    {
-        Dock = DockStyle.Top, Height = 22, Font = new Font("Segoe UI", 9.75f),
-        ForeColor = Color.FromArgb(120, 180, 255), Padding = new Padding(10, 0, 0, 0),
-    };
+    private readonly SplitContainer _split;
+    private readonly Label _empty;
+    private readonly Panel _content = new() { Dock = DockStyle.Fill, BackColor = Ui.Bg };
 
-    private readonly SplitContainer _split = new() { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 220 };
+    private readonly Label _lblTitle = Ui.Label("", Ui.Text, Ui.H1);
+    private readonly FlowLayoutPanel _chips = new()
+    {
+        Dock = DockStyle.Top, Height = 34, BackColor = Ui.Bg, Padding = new Padding(12, 4, 0, 0), WrapContents = false,
+    };
+    private readonly Button _lnkCrag = Ui.Button("open crag", 150);
+    private readonly UiList _lvComments = new();
     private readonly TextBox _txtDescription = new()
     {
         Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
-        BorderStyle = BorderStyle.None, BackColor = Color.FromArgb(24, 32, 44), ForeColor = Color.Gainsboro,
-        Font = new Font("Segoe UI", 10f), Padding = new Padding(8), Margin = new Padding(8),
-    };
-    private readonly ListView _lvComments = new()
-    {
-        Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, HideSelection = false,
-        BorderStyle = BorderStyle.None, BackColor = Color.FromArgb(24, 32, 44), ForeColor = Color.Gainsboro,
+        BorderStyle = BorderStyle.None, BackColor = Ui.Panel, ForeColor = Ui.Text,
+        Font = Ui.Body,
     };
     private readonly FlowLayoutPanel _photos = new()
     {
-        Dock = DockStyle.Bottom, Height = 128, AutoScroll = true, BackColor = Color.FromArgb(18, 26, 38),
-        Padding = new Padding(6), WrapContents = false,
+        Dock = DockStyle.Bottom, Height = 146, AutoScroll = true, BackColor = Ui.BgDeep,
+        Padding = new Padding(8), WrapContents = true,
     };
-    private readonly Label _lblPhotoNote = new()
-    {
-        Dock = DockStyle.Bottom, Height = 18, ForeColor = Color.DimGray,
-        Font = new Font("Segoe UI", 8.5f), Padding = new Padding(8, 0, 0, 0), Text = "",
-    };
-    private readonly Label _lblStatus = new()
-    {
-        Dock = DockStyle.Bottom, Height = 18, ForeColor = Color.FromArgb(255, 170, 60),
-        Font = new Font("Segoe UI", 8.5f), Padding = new Padding(8, 0, 0, 0),
-    };
+    private readonly Label _lblPhotoNote = Ui.Label("", Ui.Muted, Ui.Tiny);
+    private readonly Label _lblStatus = Ui.Label("", Ui.Amber, Ui.Small);
 
     private RockfaxClient? _api;
     private ImageFetcher? _images;
@@ -58,28 +39,78 @@ internal sealed class RouteView : UserControl
 
     public RouteView()
     {
-        BackColor = Color.FromArgb(24, 32, 44);
-        _lvComments.Columns.Add("Date", 80);
-        _lvComments.Columns.Add("Who", 130);
-        _lvComments.Columns.Add("Comment", 650);
+        BackColor = Ui.Bg;
 
-        var topSplit = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 160 };
-        topSplit.Panel1.Controls.Add(_txtDescription);
+        _empty = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "Search a route on the left — try “Stanage” — and it opens here.\n\nDescription · first ascent · comments · photos",
+            ForeColor = Ui.Muted,
+            Font = Ui.H2,
+            TextAlign = ContentAlignment.MiddleCenter,
+            BackColor = Ui.Bg,
+        };
+
+        _lvComments.Columns.Add("Date", 86);
+        _lvComments.Columns.Add("Who", 140);
+        _lvComments.Columns.Add("Comment", 900);
+        _lvComments.ColumnInk[1] = Ui.Accent;
+
+        var descHost = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Border, Padding = new Padding(1) };
+        descHost.Controls.Add(_txtDescription);
+
+        var topSplit = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, BackColor = Ui.Bg, SplitterWidth = 5 };
+        topSplit.Panel1.BackColor = Ui.Bg;
+        topSplit.Panel2.BackColor = Ui.Bg;
+        topSplit.Panel1.Controls.Add(descHost);
+        topSplit.Panel1.Controls.Add(HeaderBlock());
         topSplit.Panel2.Controls.Add(_lvComments);
+        topSplit.Panel2.Controls.Add(CommentsHeader());
+
+        _split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, BackColor = Ui.Bg, SplitterWidth = 5 };
+        _split.Panel1.BackColor = Ui.Bg;
+        _split.Panel2.BackColor = Ui.Bg;
         _split.Panel1.Controls.Add(topSplit);
         _split.Panel2.Controls.Add(_photos);
         _split.Panel2.Controls.Add(_lblPhotoNote);
+        _split.SplitterDistance = 250;
 
-        Controls.Add(_split);
-        Controls.Add(_lblStatus);
-        Controls.Add(_lnkCrag);
-        Controls.Add(_lblSub);
-        Controls.Add(_lblTitle);
+        _lblStatus.Dock = DockStyle.Bottom;
+        _lblStatus.AutoSize = false;
+        _lblStatus.Height = 22;
+        _lblStatus.BackColor = Ui.BgDeep;
+        _lblStatus.Padding = new Padding(10, 2, 0, 0);
+        _content.Controls.Add(_split);
+        _content.Controls.Add(_lblStatus);
 
-        _lnkCrag.LinkClicked += (_, _) =>
+        Controls.Add(_empty);
+        Controls.Add(_content);
+        _content.Visible = false;
+
+        _lnkCrag.Click += (_, _) =>
         {
             if (Tag is RouteSummary r && r.CragUkcId > 0) CragRequested?.Invoke(r.CragUkcId, r.CragName);
         };
+    }
+
+    private Panel HeaderBlock()
+    {
+        var head = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = Ui.Bg, Padding = Padding.Empty };
+        var linkRow = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 36, BackColor = Ui.Bg, WrapContents = false, Padding = new Padding(10, 0, 0, 0) };
+        linkRow.Controls.Add(_lnkCrag);
+        var titleRow = new Panel { Dock = DockStyle.Top, Height = 38, BackColor = Ui.Bg, Padding = new Padding(10, 4, 0, 0) };
+        titleRow.Controls.Add(_lblTitle);
+        head.Controls.Add(linkRow);
+        head.Controls.Add(titleRow);
+        head.Controls.Add(_chips);
+        return head;
+    }
+
+    private static Label CommentsHeader()
+    {
+        var l = Ui.SectionHeader("COMMENTS");
+        l.Height = 26;
+        return l;
     }
 
     public void Bind(RockfaxClient api, ImageFetcher images)
@@ -92,12 +123,16 @@ internal sealed class RouteView : UserControl
     {
         if (_api is null || _images is null) return;
         Tag = route;
-        _lblTitle.Text = $"{route.Name}   {route.Grade}{(route.TechGrade.Length > 0 ? " " + route.TechGrade : "")}   {Jx.Stars(route.Stars)}";
-        _lblSub.Text = $"UKC route {route.UkcId} · crag {route.CragUkcId}";
-        _lnkCrag.Text = route.CragName.Length > 0 ? $"▸ open crag: {route.CragName}" : "";
+        _empty.Visible = false;
+        _content.Visible = true;
+
+        _lblTitle.Text = route.Name;
+        BuildChips(route);
+        _lnkCrag.Text = route.CragName.Length > 0 ? $"▸ {route.CragName}" : "crag n/a";
         _txtDescription.Clear();
         _lvComments.Items.Clear();
         ClearPhotos();
+        _lblPhotoNote.Text = "";
         _lblStatus.Text = "loading route…";
 
         try
@@ -125,11 +160,12 @@ internal sealed class RouteView : UserControl
                 item.SubItems.Add(text);
                 _lvComments.Items.Add(item);
             }
-            if (_lvComments.Items.Count == 0) _lvComments.Items.Add(new ListViewItem("") { SubItems = { "", "no comments yet" } });
+            if (_lvComments.Items.Count == 0)
+                _lvComments.Items.Add(new ListViewItem("—") { SubItems = { "", "no comments yet" } });
         }
         catch (Exception ex)
         {
-            _lvComments.Items.Add(new ListViewItem("") { SubItems = { "", "comments unavailable: " + ex.Message } });
+            _lvComments.Items.Add(new ListViewItem("—") { SubItems = { "", "comments unavailable: " + ex.Message } });
         }
 
         _lblStatus.Text = "loading photos…";
@@ -141,13 +177,7 @@ internal sealed class RouteView : UserControl
             {
                 Image? thumb = await _images.GetThumbAsync(id);
                 if (thumb is null) continue;
-                var box = new PictureBox
-                {
-                    Image = thumb, Size = new Size(118, 118), SizeMode = PictureBoxSizeMode.Zoom,
-                    Tag = (id, title, author), Padding = new Padding(2), Cursor = Cursors.Hand,
-                };
-                box.Click += async (_, _) => await PhotoDialog.ShowAsync(_images, id, title, author);
-                _photos.Controls.Add(box);
+                _photos.Controls.Add(PhotoCard(_images, id, title, author, thumb));
                 shown++;
             }
         }
@@ -155,13 +185,42 @@ internal sealed class RouteView : UserControl
         {
             _lblPhotoNote.Text = "photos unavailable: " + ex.Message;
         }
-        _lblPhotoNote.Text = shown > 0 ? $"{shown} photos — click to view full size" : _lblPhotoNote.Text;
+        if (_lblPhotoNote.Text.Length == 0)
+            _lblPhotoNote.Text = shown > 0 ? $"  {shown} photos — click to view full size" : "  no photos for this route";
         _lblStatus.Text = "";
+    }
+
+    private void BuildChips(RouteSummary route)
+    {
+        _chips.Controls.Clear();
+        if (route.Grade.Length > 0) _chips.Controls.Add(Ui.Chip(route.Grade, Ui.Amber));
+        if (route.TechGrade.Length > 0) _chips.Controls.Add(Ui.Chip(route.TechGrade, Ui.Muted));
+        if (route.Stars > 0) _chips.Controls.Add(Ui.Chip(Jx.Stars(route.Stars), Ui.Green));
+        _chips.Controls.Add(Ui.Chip($"UKC #{route.UkcId}", Ui.Muted));
+    }
+
+    internal static Panel PhotoCard(ImageFetcher images, int id, string title, string author, Image thumb)
+    {
+        var card = new Panel
+        {
+            Size = new Size(126, 126), Margin = new Padding(4), BackColor = Ui.Card,
+            Padding = new Padding(3), Cursor = Cursors.Hand, Tag = id,
+        };
+        var box = new PictureBox { Image = thumb, Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Ui.BgDeep };
+        card.Controls.Add(box);
+        int photoId = id;
+        card.Click += async (_, _) => await PhotoDialog.ShowAsync(images, photoId, title, author);
+        box.Click += async (_, _) => await PhotoDialog.ShowAsync(images, photoId, title, author);
+        card.MouseEnter += (_, _) => card.BackColor = Ui.AccentDim;
+        card.MouseLeave += (_, _) => card.BackColor = Ui.Card;
+        return card;
     }
 
     private void ClearPhotos()
     {
-        foreach (Control c in _photos.Controls) if (c is PictureBox pb) pb.Image?.Dispose();
+        foreach (Control c in _photos.Controls)
+            if (c is Panel { Controls.Count: > 0 } && c.Controls[0] is PictureBox pb)
+                pb.Image?.Dispose();
         _photos.Controls.Clear();
     }
 

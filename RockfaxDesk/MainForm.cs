@@ -14,72 +14,69 @@ public sealed class MainForm : Form
     private readonly RockfaxClient _api = new();
     private readonly ImageFetcher _images = new();
 
-    // ---- top strips -------------------------------------------------------
+    // ---- header (auth) ------------------------------------------------------
+    private readonly TextBox _txtEmail = new();
+    private readonly TextBox _txtPassword = new() { UseSystemPasswordChar = true };
+    private readonly Label _lblUser = Ui.Label("not signed in", Ui.Muted, Ui.Small);
+    private readonly Button _btnLogin;
+    private readonly Button _btnLogbook;
 
-    private readonly TextBox _txtEmail = new() { Left = 55, Top = 10, Width = 180, PlaceholderText = "you@example.com" };
-    private readonly TextBox _txtPassword = new() { Left = 295, Top = 10, Width = 120, UseSystemPasswordChar = true, PlaceholderText = "password" };
-    private readonly Button _btnLogin = new() { Text = "Login", Left = 422, Top = 8, Width = 62, Height = 25 };
-    private readonly Label _lblUser = new() { Text = "not logged in — public data still works", Left = 500, Top = 13, AutoSize = true, ForeColor = Color.FromArgb(150, 200, 240) };
-    private readonly Button _btnLogbook = new() { Text = "My logbook", Left = 850, Top = 8, Width = 95, Height = 25, Enabled = false };
+    // ---- toolbar ------------------------------------------------------------
+    private readonly TextBox _txtSearch = new();
+    private readonly TextBox _txtCragFilter = new();
+    private readonly Button _btnSearch;
+    private readonly Button _btnAllCrags;
+    private readonly Button _btnFreeCrags;
+    private readonly Button _btnTop10;
 
-    private readonly TextBox _txtSearch = new() { Left = 10, Top = 44, Width = 250, PlaceholderText = "route name… (Enter)" };
-    private readonly Button _btnSearch = new() { Text = "Search routes", Left = 266, Top = 42, Width = 95, Height = 25 };
-    private readonly TextBox _txtCragFilter = new() { Left = 372, Top = 44, Width = 170, PlaceholderText = "filter crags…" };
-    private readonly Button _btnAllCrags = new() { Text = "All crags", Left = 548, Top = 42, Width = 80, Height = 25 };
-    private readonly Button _btnFreeCrags = new() { Text = "Free crags", Left = 632, Top = 42, Width = 85, Height = 25 };
-    private readonly Button _btnTop10 = new() { Text = "Top 10 photos", Left = 722, Top = 42, Width = 105, Height = 25 };
-
-    // ---- left list --------------------------------------------------------
-
-    private readonly ListView _lvLeft = new()
-    {
-        Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, HideSelection = false,
-        BorderStyle = BorderStyle.None, BackColor = Color.FromArgb(20, 28, 40), ForeColor = Color.Gainsboro,
-        VirtualMode = true,
-    };
-    private readonly Label _lblLeftHeader = new()
-    {
-        Dock = DockStyle.Top, Height = 22, ForeColor = Color.FromArgb(150, 200, 240),
-        Font = new Font("Segoe UI Semibold", 9.5f), Padding = new Padding(8, 2, 0, 0), Text = "results",
-    };
-    private readonly Label _lblStatus = new()
-    {
-        Dock = DockStyle.Bottom, Height = 22, BorderStyle = BorderStyle.FixedSingle,
-        Font = new Font("Segoe UI", 9f), Padding = new Padding(6, 2, 0, 0),
-        Text = "ready — search “Stanage”, or click All crags / Free crags, or open the Crag map tab",
-    };
-
-    private List<CragPoint> _cragPoints = new();
+    // ---- left rail ------------------------------------------------------------
+    private readonly UiList _lvLeft = new() { VirtualMode = true };
+    private readonly Label _lblLeftHeader = Ui.Label("results", Ui.Muted, Ui.BodyBold);
+    private readonly Label _lblLeftCount = Ui.Label("", Ui.Muted, Ui.Tiny);
     private readonly List<ListViewItem> _leftItems = new();
+    private List<CragPoint> _cragPoints = new();
 
-    // ---- right tabs -------------------------------------------------------
-
+    // ---- right content --------------------------------------------------------
     private readonly RouteView _routeView = new();
     private readonly CragView _cragView = new();
     private readonly CragMapCanvas _map = new();
     private readonly LogbookView _logbookView = new();
     private readonly Top10View _top10View = new();
-    private readonly Label _mapNote = new()
+    private readonly TabStrip _tabs = new();
+    private SplitContainer _contentSplit;
+
+    private readonly Label _lblStatus = new()
     {
-        Dock = DockStyle.Top, Height = 24, ForeColor = Color.FromArgb(150, 200, 240),
-        Font = new Font("Segoe UI", 9.5f), Padding = new Padding(8, 2, 0, 0),
+        Dock = DockStyle.Fill,
+        ForeColor = Ui.Muted,
+        BackColor = Ui.BgDeep,
+        Font = Ui.Small,
+        TextAlign = ContentAlignment.MiddleLeft,
+        Padding = new Padding(10, 0, 0, 0),
+        Text = "ready — Ctrl+F to search",
     };
-    private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
 
     public MainForm()
     {
-        Text = "Rockfax API Explorer (unofficial)";
+        Text = "Rockfax Explorer — unofficial UKClimbing client";
         StartPosition = FormStartPosition.CenterScreen;
-        Width = 1240;
-        Height = 780;
-        Font = new Font("Segoe UI", 9.5f);
-        BackColor = Color.FromArgb(20, 28, 40);
-        ForeColor = Color.Gainsboro;
+        MinimumSize = new Size(1160, 720);
+        Size = new Size(1360, 820);
+        BackColor = Ui.Bg;
+        ForeColor = Ui.Text;
+        Font = Ui.Body;
+        KeyPreview = true;
 
-        _lvLeft.Columns.Add("Name", 190);
-        _lvLeft.Columns.Add("Grade", 60);
-        _lvLeft.Columns.Add("Crag", 110);
-        _lvLeft.RetrieveVirtualItem += (_, e) => e.Item = _leftItems.Count > e.ItemIndex ? _leftItems[e.ItemIndex] : new ListViewItem();
+        _btnLogin = Ui.Button("Sign in", 84, primary: true);
+        _btnLogbook = Ui.Button("My logbook", 100);
+        _btnLogbook.Enabled = false;
+        _btnSearch = Ui.Button("Search", 84, primary: true);
+        _btnAllCrags = Ui.Button("All crags", 88);
+        _btnFreeCrags = Ui.Button("Free crags", 92);
+        _btnTop10 = Ui.Button("Top 10", 78);
+
+        BuildLeftRail();
+        BuildTabs();
 
         _routeView.Bind(_api, _images);
         _cragView.Bind(_api, _images);
@@ -89,62 +86,184 @@ public sealed class MainForm : Form
         _logbookView.RouteRequested += r => _ = OpenRouteAsync(r);
         _map.CragSelected += p => _ = OpenCragAsync(p.UkcId, p.Title);
 
-        var routeTab = new TabPage("Route") { BackColor = Color.FromArgb(24, 32, 44) };
-        routeTab.Controls.Add(_routeView);
-        var cragTab = new TabPage("Crag") { BackColor = Color.FromArgb(24, 32, 44) };
-        cragTab.Controls.Add(_cragView);
-        var mapTab = new TabPage("Crag map") { BackColor = Color.FromArgb(18, 26, 38) };
-        mapTab.Controls.Add(_map);
-        mapTab.Controls.Add(_mapNote);
-        var logbookTab = new TabPage("Logbook") { BackColor = Color.FromArgb(24, 32, 44) };
-        logbookTab.Controls.Add(_logbookView);
-        var top10Tab = new TabPage("Top 10") { BackColor = Color.FromArgb(24, 32, 44) };
-        top10Tab.Controls.Add(_top10View);
-        _tabs.TabPages.AddRange(new[] { routeTab, cragTab, mapTab, logbookTab, top10Tab });
+        // ---- structure ---------------------------------------------------------
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Ui.Bg, ColumnCount = 1, RowCount = 4 };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));   // header
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));   // toolbar
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // content
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));   // status
 
-        var left = new Panel { Dock = DockStyle.Left, Width = 380, BackColor = Color.FromArgb(20, 28, 40) };
-        left.Controls.Add(_lvLeft);
-        left.Controls.Add(_lblLeftHeader);
+        root.Controls.Add(BuildHeaderBar(), 0, 0);
+        root.Controls.Add(BuildToolbar(), 0, 1);
+        root.Controls.Add(BuildContent(), 0, 2);
+        root.Controls.Add(BuildStatusBar(), 0, 3);
+        Controls.Add(root);
 
-        var top = new Panel { Dock = DockStyle.Top, Height = 74, BackColor = Color.FromArgb(20, 28, 40) };
-        top.Controls.AddRange(new Control[]
-        {
-            new Label { Text = "Email:", Left = 12, Top = 13, AutoSize = true },
-            _txtEmail,
-            new Label { Text = "Password:", Left = 238, Top = 13, AutoSize = true },
-            _txtPassword,
-            _btnLogin,
-            _lblUser,
-            _btnLogbook,
-            _txtSearch,
-            _btnSearch,
-            _txtCragFilter,
-            _btnAllCrags,
-            _btnFreeCrags,
-            _btnTop10,
-        });
-
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterWidth = 6, FixedPanel = FixedPanel.Panel1 };
-        split.Panel1.Controls.Add(left);
-        split.Panel2.Controls.Add(_tabs);
-        split.SplitterDistance = 380;
-
-        Controls.Add(split);
-        Controls.Add(top);
-        Controls.Add(_lblStatus);
-
+        // ---- events ------------------------------------------------------------
         _btnLogin.Click += async (_, _) => await LoginAsync();
-        _btnLogbook.Click += async (_, _) => { _tabs.SelectedIndex = 3; await _logbookView.LoadAsync(_api); };
+        _btnLogbook.Click += async (_, _) => { _tabs.Select(3); await _logbookView.LoadAsync(_api); };
         _btnSearch.Click += async (_, _) => await SearchAsync(_txtSearch.Text);
-        _txtSearch.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(_txtSearch.Text); } };
         _btnAllCrags.Click += async (_, _) => await LoadAllCragsAsync();
         _btnFreeCrags.Click += async (_, _) => await LoadFreeCragsAsync();
-        _btnTop10.Click += async (_, _) => { _tabs.SelectedIndex = 4; await _top10View.LoadAsync(); };
+        _btnTop10.Click += async (_, _) => { _tabs.Select(4); await _top10View.LoadAsync(); };
         _lvLeft.DoubleClick += (_, _) => _ = LeftItemActivated();
-        _txtCragFilter.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await CragFilterAsync(_txtCragFilter.Text); } };
+        _lvLeft.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) { await LeftItemActivated(); } };
+        _txtSearch.KeyDown += async (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(_txtSearch.Text); }
+            if (e.KeyCode == Keys.Escape) { _txtSearch.Clear(); }
+        };
+        _txtCragFilter.KeyDown += async (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await CragFilterAsync(_txtCragFilter.Text); }
+            if (e.KeyCode == Keys.Escape) { _txtCragFilter.Clear(); }
+        };
+        KeyDown += (_, e) =>
+        {
+            if (e.Control && e.KeyCode == Keys.F) { _txtSearch.Focus(); e.Handled = true; }
+        };
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        // SplitterDistance is only reliable once the container has a real size.
+        _contentSplit.SplitterDistance = 390;
+    }
+
+    // ---- layout builders -----------------------------------------------------
+
+    private Panel BuildHeaderBar()
+    {
+        var bar = new Panel { Dock = DockStyle.Fill, BackColor = Ui.BgDeep, Padding = new Padding(14, 0, 14, 0) };
+
+        var title = Ui.Label("ROCKFAX EXPLORER", Ui.Text, Ui.H1, auto: false);
+        title.AutoSize = false;
+        title.Size = new Size(232, 54);
+        title.TextAlign = ContentAlignment.MiddleLeft;
+        var subtitle = Ui.Label("unofficial UKClimbing client", Ui.Muted, Ui.Tiny);
+        subtitle.Location = new Point(244, 22);
+
+        // Auth cluster hugs the right edge. FlowDirection.RightToLeft places the first
+        // child at the right edge and flows leftward, so add in reverse visual order.
+        var auth = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            Width = 820,
+            BackColor = Ui.BgDeep,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(0, 12, 0, 0),
+            WrapContents = false,
+        };
+        auth.Controls.Add(_btnLogbook);
+        auth.Controls.Add(_lblUser);
+        auth.Controls.Add(_btnLogin);
+        auth.Controls.Add(Ui.Box(_txtPassword, 116, cue: "password"));
+        auth.Controls.Add(Ui.Box(_txtEmail, 176, cue: "you@example.com"));
+
+        bar.Controls.Add(auth);
+        bar.Controls.Add(subtitle);
+        bar.Controls.Add(title);
+        return bar;
+    }
+
+    private Panel BuildToolbar()
+    {
+        var bar = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Padding = new Padding(14, 9, 14, 0) };
+        var flow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Ui.Bg,
+            WrapContents = false,
+        };
+        flow.Controls.Add(Ui.Box(_txtSearch, 230, cue: "route name…  (Enter)"));
+        flow.Controls.Add(_btnSearch);
+        flow.Controls.Add(MakeSeparator());
+        flow.Controls.Add(Ui.Box(_txtCragFilter, 170, cue: "filter crags…  (Enter)"));
+        flow.Controls.Add(_btnAllCrags);
+        flow.Controls.Add(_btnFreeCrags);
+        flow.Controls.Add(MakeSeparator());
+        flow.Controls.Add(_btnTop10);
+        bar.Controls.Add(flow);
+        return bar;
+    }
+
+    private static Panel MakeSeparator()
+        => new() { Width = 1, Height = 26, BackColor = Ui.Border, Margin = new Padding(4, 2, 14, 0) };
+
+    private SplitContainer BuildContent()
+    {
+        var left = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Padding = new Padding(10, 10, 0, 6) };
+        var listHost = new Panel { Dock = DockStyle.Fill, BackColor = Ui.BgDeep, Padding = Padding.Empty };
+        _lvLeft.Dock = DockStyle.Fill;
+        _lblLeftHeader.Dock = DockStyle.Top;
+        _lblLeftHeader.Height = 26;
+        _lblLeftHeader.BackColor = Ui.BgDeep;
+        _lblLeftHeader.Padding = new Padding(4, 4, 0, 0);
+        _lblLeftCount.Dock = DockStyle.Bottom;
+        _lblLeftCount.Height = 20;
+        _lblLeftCount.BackColor = Ui.BgDeep;
+        _lblLeftCount.Padding = new Padding(4, 2, 0, 0);
+        listHost.Controls.Add(_lvLeft);
+        listHost.Controls.Add(_lblLeftCount);
+        listHost.Controls.Add(_lblLeftHeader);
+        left.Controls.Add(listHost);
+
+        var split = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            SplitterWidth = 5,
+            FixedPanel = FixedPanel.Panel1,
+            BackColor = Ui.Bg,
+        };
+        split.Panel1.BackColor = Ui.Bg;
+        split.Panel2.BackColor = Ui.Bg;
+        split.Panel1.Controls.Add(left);
+        split.Panel2.Controls.Add(_tabs);
+        _contentSplit = split;
+        return split;
+    }
+
+    private Panel BuildStatusBar()
+    {
+        var bar = new Panel { Dock = DockStyle.Fill, BackColor = Ui.BgDeep, Padding = Padding.Empty };
+        var right = Ui.Label("app-live.ukclimbing.com · unofficial · use your own account", Ui.Muted, Ui.Tiny);
+        right.Dock = DockStyle.Right;
+        right.TextAlign = ContentAlignment.MiddleRight;
+        right.Padding = new Padding(0, 3, 12, 0);
+        right.AutoSize = false;
+        right.Size = new Size(360, 26);
+        bar.Controls.Add(right);
+        bar.Controls.Add(_lblStatus);
+        return bar;
+    }
+
+    private void BuildLeftRail()
+    {
+        _lvLeft.Columns.Add("Name", 152);
+        _lvLeft.Columns.Add("Grade", 48);
+        _lvLeft.Columns.Add("Detail", 118);
+        _lvLeft.ColumnInk[1] = Ui.Amber;
+        _lvLeft.StretchLastColumn();
+        _lvLeft.RetrieveVirtualItem += (_, e) => e.Item = _leftItems.Count > e.ItemIndex ? _leftItems[e.ItemIndex] : new ListViewItem();
+    }
+
+    private void BuildTabs()
+    {
+        _tabs.AddTab("ROUTE", _routeView);
+        _tabs.AddTab("CRAG", _cragView);
+        _tabs.AddTab("CRAG MAP", _map);
+        _tabs.AddTab("LOGBOOK", _logbookView);
+        _tabs.AddTab("TOP 10", _top10View);
     }
 
     // ---- shared helpers ---------------------------------------------------
+
+    private async Task RunSafe(Func<Task> work)
+    {
+        try { await work(); }
+        catch (Exception ex) { _lblStatus.Text = $"failed: {ex.Message}"; }
+    }
 
     private async Task RunAsync(string what, Func<Task> work)
     {
@@ -152,40 +271,44 @@ public sealed class MainForm : Form
         {
             _lblStatus.Text = $"{what}…";
             await work();
-            _lblStatus.Text = $"{what}: done";
+            _lblStatus.Text = $"{what} — done";
         }
         catch (Exception ex)
         {
-            _lblStatus.Text = $"{what}: FAILED — {ex.Message}";
+            _lblStatus.Text = $"{what} — failed: {ex.Message}";
         }
     }
 
-    private void SetLeftItems(IEnumerable<ListViewItem> items, string header)
+    private void SetLeftItems(IEnumerable<(ListViewItem Item, string Key)> items, string header, string count)
     {
         _leftItems.Clear();
-        _leftItems.AddRange(items.ToList());
+        _leftItems.AddRange(items.Select(x => x.Item));
         _lvLeft.VirtualListSize = _leftItems.Count;
         _lblLeftHeader.Text = header;
+        _lblLeftCount.Text = count;
     }
 
     // ---- actions ----------------------------------------------------------
 
     private Task LoginAsync()
-        => RunAsync("login", async () =>
+        => RunAsync("signing in", async () =>
         {
             var session = await _api.LoginAsync(_txtEmail.Text, _txtPassword.Text);
-            _lblUser.Text = $"logged in as {session.Username} (id {session.UserId})";
+            _lblUser.Text = $"{session.Username} · user {session.UserId}";
+            _lblUser.ForeColor = Ui.Green;
             _btnLogbook.Enabled = true;
-            _tabs.SelectedIndex = 3;
+            _tabs.Select(3);
             await _logbookView.LoadAsync(_api);
         });
 
     private Task SearchAsync(string query)
-        => RunAsync($"search “{query}”", async () =>
+        => RunSafe(async () =>
         {
             if (query.Trim().Length < 3) { _lblStatus.Text = "type at least 3 characters"; return; }
+            _lblStatus.Text = $"searching “{query}”…";
             using JsonDocument doc = await _api.SearchRoutesAsync(query);
-            var items = new List<ListViewItem>();
+            var items = new List<(ListViewItem Item, string Key)>();
+            RouteSummary? first = null;
             foreach (JsonElement route in doc.RootElement.GetProperty("routes").EnumerateArray())
             {
                 RouteSummary summary = RouteSummary.FromSearch(route);
@@ -193,22 +316,24 @@ public sealed class MainForm : Form
                 item.SubItems.Add(summary.Grade);
                 item.SubItems.Add(summary.CragName);
                 item.Tag = summary;
-                items.Add(item);
+                first ??= summary;
+                items.Add((item, summary.Name));
             }
-            SetLeftItems(items, $"routes matching “{query}” — double-click to open");
-            if (items.Count > 0 && items[0].Tag is RouteSummary first) await OpenRouteAsync(first);
+            SetLeftItems(items, $"routes matching “{query}”", $"{items.Count} results — double-click or press Enter to open");
+            _lblStatus.Text = $"search “{query}” — {items.Count} results";
+            if (first is not null) await OpenRouteAsync(first);
         });
 
     private async Task OpenRouteAsync(RouteSummary route)
     {
-        _tabs.SelectedIndex = 0;
+        _tabs.Select(0);
         await _routeView.ShowRouteAsync(route);
         _lblStatus.Text = $"route: {route.Name}";
     }
 
     private async Task OpenCragAsync(int ukcCragId, string name)
     {
-        _tabs.SelectedIndex = 1;
+        _tabs.Select(1);
         await _cragView.ShowCragAsync(ukcCragId, name);
         _lblStatus.Text = $"crag: {name}";
     }
@@ -233,12 +358,11 @@ public sealed class MainForm : Form
         }
         _cragPoints = points;
         _map.Points = points;
-        _mapNote.Text = _map.Subtitle;
         return points;
     }
 
     private Task LoadAllCragsAsync()
-        => RunAsync("all crags", async () =>
+        => RunAsync("loading all crags", async () =>
         {
             List<CragPoint> points = await EnsureCragPointsAsync();
             SetLeftItems(points
@@ -247,15 +371,14 @@ public sealed class MainForm : Form
                 {
                     var item = new ListViewItem(p.Title);
                     item.SubItems.Add(p.NRoutes.ToString());
-                    item.SubItems.Add($"{p.Lat:0.000}, {p.Lng:0.000}");
+                    item.SubItems.Add($"{p.Lat:0.00}, {p.Lng:0.00}");
                     item.Tag = p;
-                    return item;
-                }), $"{points.Count:N0} crags (busiest first) — double-click to open");
-            _lblStatus.Text = "crag list loaded — also check the Crag map tab";
+                    return (item, p.Title);
+                }), "all crags — busiest first", $"{points.Count:N0} crags — double-click to open · see the CRAG MAP tab");
         });
 
     private Task LoadFreeCragsAsync()
-        => RunAsync("free crags", async () =>
+        => RunAsync("loading free crags", async () =>
         {
             Task<JsonDocument> freeTask = _api.GetFreeCragsAsync();
             List<CragPoint> points = await EnsureCragPointsAsync();
@@ -264,8 +387,7 @@ public sealed class MainForm : Form
             var freeIds = new HashSet<int>(free.RootElement.GetProperty("free_crags").EnumerateArray()
                 .Select(x => x.GetInt32()).Where(x => x != 0));
             foreach (CragPoint p in points) p.Free = freeIds.Contains(p.RockfaxId) || freeIds.Contains(p.UkcId);
-            _map.Points = _cragPoints; // re-paint with free-sample highlights
-            _mapNote.Text = _map.Subtitle + "   (orange = free sample)";
+            _map.Points = _cragPoints; // repaint with amber free-sample highlights
 
             SetLeftItems(points.Where(p => p.Free)
                 .Select(p =>
@@ -274,8 +396,8 @@ public sealed class MainForm : Form
                     item.SubItems.Add(p.NRoutes.ToString());
                     item.SubItems.Add("free sample");
                     item.Tag = p;
-                    return item;
-                }), $"{points.Count(p => p.Free)} free-sample crags — double-click to open");
+                    return (item, p.Title);
+                }), "free-sample crags", $"{points.Count(p => p.Free)} crags highlighted amber on the CRAG MAP");
         });
 
     private Task CragFilterAsync(string filter)
@@ -289,17 +411,17 @@ public sealed class MainForm : Form
                 {
                     var item = new ListViewItem(p.Title);
                     item.SubItems.Add(p.NRoutes.ToString());
-                    item.SubItems.Add($"{p.Lat:0.000}, {p.Lng:0.000}");
+                    item.SubItems.Add($"{p.Lat:0.00}, {p.Lng:0.00}");
                     item.Tag = p;
-                    return item;
-                }), $"crags matching “{filter}” — double-click to open");
+                    return (item, p.Title);
+                }), $"crags matching “{filter}”", $"{_leftItems.Count} matches — double-click to open");
         });
 
     private Task LeftItemActivated()
-        => RunAsync("open item", async () =>
+        => RunAsync("opening", async () =>
         {
-            if (_lvLeft.SelectedItems.Count == 0) return;
-            switch (_lvLeft.SelectedItems[0].Tag)
+            if (_lvLeft.SelectedIndices.Count == 0) return;
+            switch (_lvLeft.Items[_lvLeft.SelectedIndices[0]].Tag)
             {
                 case RouteSummary route:
                     await OpenRouteAsync(route);

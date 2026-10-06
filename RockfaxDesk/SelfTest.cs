@@ -60,8 +60,9 @@ internal static class SelfTest
         await Step("weather (crag 4)", async () =>
         {
             using JsonDocument doc = await api.GetWeatherAsync(new[] { 4 }, Site.UkClimbing);
-            weatherLine = CragView.FormatWeather(doc);
-            return weatherLine.Length > 0 ? "forecast parsed" : "no forecast data";
+            int chips = CragView.FormatWeather(doc).Count;
+            weatherLine = $"{chips} day chips";
+            return chips > 0 ? $"forecast parsed ({chips} days)" : "no forecast data";
         });
 
         await Step("route-comments (3212)", async () =>

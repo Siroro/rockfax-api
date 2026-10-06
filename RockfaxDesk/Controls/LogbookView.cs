@@ -7,63 +7,61 @@ namespace RockfaxDesk.Controls;
 /// <summary>Your ascents and wishlist, loaded after login.</summary>
 internal sealed class LogbookView : UserControl
 {
-    private readonly Label _lblTitle = new()
-    {
-        Dock = DockStyle.Top, Height = 30, Font = new Font("Segoe UI Semibold", 13f),
-        ForeColor = Color.FromArgb(235, 245, 255), Padding = new Padding(8, 4, 0, 0), Text = "Logbook",
-    };
-    private readonly ListView _lvAscents = new()
-    {
-        Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, HideSelection = false,
-        BorderStyle = BorderStyle.None, BackColor = Color.FromArgb(24, 32, 44), ForeColor = Color.Gainsboro,
-    };
-    private readonly ListView _lvWishlist = new()
-    {
-        Dock = DockStyle.Bottom, Height = 160, View = View.Details, FullRowSelect = true, HideSelection = false,
-        BorderStyle = BorderStyle.None, BackColor = Color.FromArgb(24, 32, 44), ForeColor = Color.Gainsboro,
-    };
-    private readonly Label _lblWishlist = new()
-    {
-        Dock = DockStyle.Bottom, Height = 20, ForeColor = Color.FromArgb(150, 200, 240),
-        Font = new Font("Segoe UI Semibold", 9.5f), Padding = new Padding(8, 0, 0, 0), Text = "Wishlist",
-    };
-    private readonly Label _lblStatus = new()
-    {
-        Dock = DockStyle.Top, Height = 20, ForeColor = Color.FromArgb(255, 170, 60),
-        Font = new Font("Segoe UI", 9f), Padding = new Padding(8, 0, 0, 0), Text = "log in to load your logbook",
-    };
+    private readonly UiList _lvAscents = new();
+    private readonly UiList _lvWishlist = new();
+    private readonly Label _lblStatus = Ui.Label("log in to load your logbook", Ui.Muted, Ui.Small);
+    private readonly Label _lblWishlist = Ui.SectionHeader("WISHLIST", 26);
+    private readonly SplitContainer _split;
 
     public event Action<RouteSummary>? RouteRequested;
 
     public LogbookView()
     {
-        BackColor = Color.FromArgb(24, 32, 44);
-        _lvAscents.Columns.Add("Date", 90);
-        _lvAscents.Columns.Add("Route", 240);
+        BackColor = Ui.Bg;
+
+        _lvAscents.Columns.Add("Date", 92);
+        _lvAscents.Columns.Add("Route", 250);
         _lvAscents.Columns.Add("Grade", 70);
-        _lvAscents.Columns.Add("Crag", 200);
-        _lvAscents.Columns.Add("Style", 190);
-        _lvAscents.Columns.Add("Notes", 320);
-        _lvWishlist.Columns.Add("Route", 260);
-        _lvWishlist.Columns.Add("Crag", 220);
+        _lvAscents.Columns.Add("Crag", 210);
+        _lvAscents.Columns.Add("Style", 200);
+        _lvAscents.Columns.Add("Notes", 420);
+        _lvAscents.ColumnInk[2] = Ui.Amber;
+        _lvAscents.ColumnInk[4] = Ui.Accent;
+        _lvWishlist.Columns.Add("Route", 280);
+        _lvWishlist.Columns.Add("Crag", 240);
+
         _lvAscents.DoubleClick += (_, _) =>
         {
             if (_lvAscents.SelectedItems.Count > 0 && _lvAscents.SelectedItems[0].Tag is RouteSummary r)
                 RouteRequested?.Invoke(r);
         };
 
-        Controls.Add(_lvAscents);
-        Controls.Add(_lvWishlist);
-        Controls.Add(_lblWishlist);
-        Controls.Add(_lblStatus);
-        Controls.Add(_lblTitle);
+        var titleRow = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = Ui.Bg, Padding = new Padding(10, 4, 0, 0) };
+        titleRow.Controls.Add(Ui.Label("YOUR LOGBOOK", Ui.Text, Ui.H2));
+
+        _split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, BackColor = Ui.Bg, SplitterWidth = 5 };
+        _split.Panel1.BackColor = Ui.Bg;
+        _split.Panel2.BackColor = Ui.Bg;
+        _lblStatus.Dock = DockStyle.Bottom;
+        _lblStatus.AutoSize = false;
+        _lblStatus.Height = 22;
+        _lblStatus.BackColor = Ui.BgDeep;
+        _lblStatus.Padding = new Padding(10, 2, 0, 0);
+        _split.Panel1.Controls.Add(_lvAscents);
+        _split.Panel1.Controls.Add(_lblStatus);
+        _split.Panel2.Controls.Add(_lvWishlist);
+        _split.Panel2.Controls.Add(_lblWishlist);
+        _split.SplitterDistance = 420;
+
+        Controls.Add(_split);
+        Controls.Add(titleRow);
     }
 
     public async Task LoadAsync(RockfaxClient api)
     {
         if (!api.IsLoggedIn)
         {
-            _lblStatus.Text = "log in first (top-left)";
+            _lblStatus.Text = "sign in first (top-right)";
             return;
         }
 
@@ -88,7 +86,7 @@ internal sealed class LogbookView : UserControl
                 _lvAscents.Items.Add(item);
                 total++;
             }
-            _lblStatus.Text = $"{total} ascents" + (deleted > 0 ? $" ({deleted} deleted entries skipped)" : "");
+            _lblStatus.Text = $"{total} ascents" + (deleted > 0 ? $"  ·  {deleted} deleted entries skipped" : "") + "  ·  double-click to open the route";
         }
         catch (Exception ex)
         {
@@ -106,11 +104,11 @@ internal sealed class LogbookView : UserControl
                 _lvWishlist.Items.Add(item);
                 count++;
             }
-            _lblWishlist.Text = $"Wishlist ({count})";
+            _lblWishlist.Text = $"▍ WISHLIST ({count})";
         }
         catch
         {
-            _lblWishlist.Text = "Wishlist unavailable";
+            _lblWishlist.Text = "▍ WISHLIST unavailable";
         }
     }
 
