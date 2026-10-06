@@ -172,3 +172,55 @@ public class LogbookStatsTests
         Assert.Equal((0, 0, 0, ""), (total, thisYear, crags, top));
     }
 }
+
+public class SessionStoreTests
+{
+    private static NavEntry Route(int id, string name = "route") => new(NavEntry.KindRoute, id, name);
+    private static NavEntry Crag(int id, string name = "crag") => new(NavEntry.KindCrag, id, name);
+
+    [Fact]
+    public void Push_recent_moves_existing_entries_to_the_front()
+    {
+        var recents = new List<NavEntry> { Route(1, "a"), Route(2, "b"), Route(3, "c") };
+        SessionStore.PushRecent(recents, Route(2, "b"));
+        Assert.Equal(new[] { 2, 1, 3 }, recents.Select(r => r.UkcId));
+    }
+
+    [Fact]
+    public void Push_recent_deduplicates_by_kind_and_id_not_name()
+    {
+        var recents = new List<NavEntry> { Route(1, "Old Name") };
+        SessionStore.PushRecent(recents, Route(1, "New Name"));
+        Assert.Single(recents);
+        Assert.Equal("New Name", recents[0].Name);
+    }
+
+    [Fact]
+    public void Routes_and_crags_are_tracked_separately()
+    {
+        var recents = new List<NavEntry> { Route(1) };
+        SessionStore.PushRecent(recents, Crag(1));
+        Assert.Equal(2, recents.Count);
+    }
+
+    [Fact]
+    public void Push_recent_respects_the_cap()
+    {
+        var recents = new List<NavEntry>();
+        for (int i = 1; i <= 25; i++) SessionStore.PushRecent(recents, Route(i));
+        Assert.Equal(SessionStore.RecentCap, recents.Count);
+        Assert.Equal(25, recents[0].UkcId);      // newest kept
+        Assert.Equal(6, recents[^1].UkcId);      // oldest trimmed
+    }
+
+    [Fact]
+    public void Session_state_round_trips_through_json()
+    {
+        var state = new SessionState([Route(5, "Curbar Edge")], [Crag(9, "Stanage")]);
+        string json = System.Text.Json.JsonSerializer.Serialize(state);
+        SessionState? back = System.Text.Json.JsonSerializer.Deserialize<SessionState>(json);
+        Assert.NotNull(back);
+        Assert.Equal(5, back!.RecentRoutes[0].UkcId);
+        Assert.Equal("Stanage", back.RecentCrags[0].Name);
+    }
+}

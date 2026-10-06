@@ -214,6 +214,11 @@ drive it headlessly for captures):
   window/splitter/map geometry and your last search persist across runs, right-click
   menus on every list (open · show on map · open on UKC · copy link), and a "?"
   About box lists attribution + shortcuts.
+- **Back / forward** — every route or crag you open pushes onto a navigation stack:
+  toolbar arrows or **Alt+←/→** walk back and forward through them.
+- **Recents** — routes and crags you open are remembered (newest first, capped at 20,
+  stored only in `%LOCALAPPDATA%\RockfaxDesk\session.json`); on the next launch the
+  rail offers them so you can pick up where you left off.
 - Keyboard: **Ctrl+F** focuses search, **Ctrl+1–5** switches tabs, **Enter**
   searches/opens, **Esc** clears, **F5** refreshes the current route/crag/list,
   and the map (once clicked) pans with the **arrow keys**, zooms with **+/−**

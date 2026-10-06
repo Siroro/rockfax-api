@@ -25,6 +25,14 @@ public sealed class MainForm : Form
     private readonly ToolTip _tips = new();
     private const string BaseTitle = "Rockfax Explorer — unofficial UKClimbing client";
 
+    // ---- navigation history + cross-session recents -----------------------------
+    private readonly SessionState _session = SessionStore.Load();
+    private readonly List<NavEntry> _navBack = [];
+    private readonly List<NavEntry> _navForward = [];
+    private NavEntry? _current;
+    private Button _btnBack = new();
+    private Button _btnForward = new();
+
     // ---- toolbar ------------------------------------------------------------
     private readonly TextBox _txtSearch = new();
     private readonly TextBox _txtCragFilter = new();
@@ -112,8 +120,13 @@ public sealed class MainForm : Form
         _btnAllCrags = Ui.Button("All crags", 88);
         _btnFreeCrags = Ui.Button("Free crags", 92);
         _btnTop10 = Ui.Button("Top 10", 78);
+        _btnBack = Ui.Button("←", 34);
+        _btnForward = Ui.Button("→", 34);
+        _btnBack.Enabled = _btnForward.Enabled = false;
 
         _tips.SetToolTip(_btnSearch, "search UKC routes by name (Ctrl+F)");
+        _tips.SetToolTip(_btnBack, "back (Alt+←)");
+        _tips.SetToolTip(_btnForward, "forward (Alt+→)");
         _tips.SetToolTip(_btnAllCrags, "every crag with a marker, busiest first");
         _tips.SetToolTip(_btnFreeCrags, "Rockfax free-sample crags (amber on the map)");
         _tips.SetToolTip(_btnTop10, "the week's top-ten photos");
@@ -224,9 +237,13 @@ public sealed class MainForm : Form
                 _tabs.Select(e.KeyCode - Keys.D1);
                 e.Handled = true;
             }
+            if (e.Alt && e.KeyCode == Keys.Left) { _ = GoBackAsync(); e.Handled = true; }
+            if (e.Alt && e.KeyCode == Keys.Right) { _ = GoForwardAsync(); e.Handled = true; }
             if (e.KeyCode == Keys.F5) { await ReloadCurrentAsync(); e.Handled = true; }
             if (e.KeyCode == Keys.F1) { _btnHelp.PerformClick(); e.Handled = true; }
         };
+        _btnBack.Click += async (_, _) => await GoBackAsync();
+        _btnForward.Click += async (_, _) => await GoForwardAsync();
         _lblStatus.Click += (_, _) =>
         {
             try
@@ -292,6 +309,9 @@ public sealed class MainForm : Form
                     await OpenRouteAsync(new RouteSummary(
                         parts.Length > 1 ? parts[1] : $"route {routeId}", "", "", 0, "", routeId, 0, 0));
             }
+        if (args.Contains("--back")) await GoBackAsync();
+        if (args.Contains("--forward")) await GoForwardAsync();
+        if (_leftItems.Count == 0) ShowRecents(); // pick up where the last session left off
         if (args.Contains("--top10")) { _tabs.Select(4); await _top10View.LoadAsync(); }
         // (hooks above are used by the screenshot harness: shot.ps1)
 
@@ -396,12 +416,15 @@ public sealed class MainForm : Form
                 "Shortcuts:\n" +
                 "  Ctrl+F   focus search\n" +
                 "  Ctrl+1–5 switch tabs (route, crag, map, logbook, top 10)\n" +
+                "  Alt+←/→  back / forward through routes & crags you opened\n" +
                 "  Enter    search / open selection\n" +
                 "  Esc      clear the search box\n" +
                 "  F5       refresh current route/crag/list\n" +
                 "  Map:     drag = pan \u00b7 wheel or +/- = zoom \u00b7 arrows = pan \u00b7 click a dot = open crag\n" +
+                "           right-click = copy coordinates / Google Maps / OpenStreetMap\n" +
                 "  Lists:   right-click a row for open / UKC link actions\n" +
-                "  Photos:  \u2190/\u2192 or wheel = previous/next \u00b7 click = close",
+                "  Photos:  \u2190/\u2192 or wheel = previous/next \u00b7 click = close\n\n" +
+                "Your recent routes & crags are stored only on this device.",
                 "About Rockfax Explorer", MessageBoxButtons.OK, MessageBoxIcon.Information);
         // Auth cluster hugs the right edge. FlowDirection.RightToLeft places the first
         // child at the right edge and flows leftward, so add in reverse visual order.
@@ -436,6 +459,9 @@ public sealed class MainForm : Form
             BackColor = Ui.Bg,
             WrapContents = false,
         };
+        flow.Controls.Add(_btnBack);
+        flow.Controls.Add(_btnForward);
+        flow.Controls.Add(MakeSeparator());
         flow.Controls.Add(Ui.Box(_txtSearch, 230, cue: "route name…  (Enter)"));
         flow.Controls.Add(_btnSearch);
         flow.Controls.Add(MakeSeparator());
@@ -604,24 +630,79 @@ public sealed class MainForm : Form
     private RouteSummary? _lastRoute;
     private (int Id, string Name)? _lastCrag;
 
-    private async Task OpenRouteAsync(RouteSummary route)
+    private async Task OpenRouteAsync(RouteSummary route, bool navigate = true)
     {
         _lastRoute = route;
         _tabs.Select(0);
         Text = $"{route.Name} — Rockfax Explorer";
         await _routeView.ShowRouteAsync(route);
+        if (navigate) RecordNav(new NavEntry(NavEntry.KindRoute, route.UkcId, route.Name));
         _lblStatus.Text = $"route: {route.Name}";
     }
 
-    private async Task OpenCragAsync(int ukcCragId, string name)
+    private async Task OpenCragAsync(int ukcCragId, string name, bool navigate = true)
     {
         _lastCrag = (ukcCragId, name);
         _tabs.Select(1);
         Text = name.Length > 0 ? $"{name} — Rockfax Explorer" : BaseTitle;
         _map.SelectCrag(ukcCragId); // ring the dot on the map too
         await _cragView.ShowCragAsync(ukcCragId, name);
+        if (navigate)
+        {
+            CragPoint? p = _cragPoints.FirstOrDefault(x => x.UkcId == ukcCragId);
+            RecordNav(new NavEntry(NavEntry.KindCrag, ukcCragId, name.Length > 0 ? name : p?.Title ?? $"crag {ukcCragId}"));
+        }
         _lblStatus.Text = $"crag: {name}";
     }
+
+    /// <summary>Records an open as the new navigation position and remembers it for
+    /// future sessions. Opening the same page again is a no-op (F5-style refresh).</summary>
+    private void RecordNav(NavEntry entry)
+    {
+        bool samePage = _current is { } cur && cur.Kind == entry.Kind && cur.UkcId == entry.UkcId;
+        if (!samePage)
+        {
+            if (_current is { } previous) _navBack.Add(previous);
+            _navForward.Clear();
+        }
+        _current = entry;
+        SessionStore.PushRecent(entry.Kind == NavEntry.KindRoute ? _session.RecentRoutes : _session.RecentCrags, entry);
+        SessionStore.Save(_session);
+        UpdateNavButtons();
+    }
+
+    private void UpdateNavButtons()
+    {
+        _btnBack.Enabled = _navBack.Count > 0;
+        _btnForward.Enabled = _navForward.Count > 0;
+    }
+
+    private async Task GoBackAsync()
+    {
+        if (_navBack.Count == 0) return;
+        NavEntry entry = _navBack[^1];
+        _navBack.RemoveAt(_navBack.Count - 1);
+        if (_current is { } cur) _navForward.Insert(0, cur);
+        _current = entry;
+        UpdateNavButtons();
+        await OpenEntryAsync(entry);
+    }
+
+    private async Task GoForwardAsync()
+    {
+        if (_navForward.Count == 0) return;
+        NavEntry entry = _navForward[0];
+        _navForward.RemoveAt(0);
+        if (_current is { } cur) _navBack.Add(cur);
+        _current = entry;
+        UpdateNavButtons();
+        await OpenEntryAsync(entry);
+    }
+
+    private Task OpenEntryAsync(NavEntry entry)
+        => entry.Kind == NavEntry.KindRoute
+            ? OpenRouteAsync(new RouteSummary(entry.Name, "", "", 0, "", entry.UkcId, 0, 0), navigate: false)
+            : OpenCragAsync(entry.UkcId, entry.Name, navigate: false);
 
     private Task ReloadCurrentAsync()
         => RunAsync("refreshing", async () =>
@@ -761,8 +842,35 @@ public sealed class MainForm : Form
         catch { _lblStatus.Text = "clipboard is busy — try again"; }
     }
 
+    /// <summary>Fills the rail with this device's recent routes and crags (launch state).</summary>
+    private void ShowRecents()
+    {
+        var items = new List<(ListViewItem Item, string Key)>();
+        foreach (NavEntry entry in _session.RecentRoutes.Take(10))
+        {
+            var item = new ListViewItem(entry.Name) { Tag = new RouteSummary(entry.Name, "", "", 0, "", entry.UkcId, 0, 0) };
+            item.SubItems.Add("");
+            item.SubItems.Add("route");
+            items.Add((item, $"r{entry.UkcId}"));
+        }
+        foreach (NavEntry entry in _session.RecentCrags.Take(10))
+        {
+            CragPoint? known = _cragPoints.FirstOrDefault(x => x.UkcId == entry.UkcId);
+            var tag = known ?? new CragPoint { UkcId = entry.UkcId, Title = entry.Name };
+            var item = new ListViewItem(entry.Name) { Tag = tag };
+            item.SubItems.Add(known is not null ? known.NRoutes.ToString() : "");
+            item.SubItems.Add("crag");
+            items.Add((item, $"c{entry.UkcId}"));
+        }
+        if (items.Count == 0) return;
+        SetLeftItems(items, "recent — on this device", "routes & crags from your last sessions · nothing leaves this machine");
+    }
+
     private void ShowCragOnMap(CragPoint crag)
     {
+        if (crag.Lat == 0 && crag.Lng == 0) // e.g. a recent-entry crag with no stored coordinates
+            crag = _cragPoints.FirstOrDefault(x => x.UkcId == crag.UkcId) ?? crag;
+        if (crag.Lat == 0 && crag.Lng == 0) { _lblStatus.Text = "crag location unknown — open its page instead"; return; }
         _tabs.Select(2);
         _map.CenterOn(crag.Lat, crag.Lng, 11f);
         _map.SelectCrag(crag.UkcId);
