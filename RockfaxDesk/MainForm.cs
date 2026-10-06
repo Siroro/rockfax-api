@@ -120,7 +120,7 @@ public sealed class MainForm : Form
             CragPoint? p = _cragPoints.FirstOrDefault(x => x.UkcId == id || x.RockfaxId == id);
             if (p is null) { _lblStatus.Text = "crag location unknown"; return; }
             _tabs.Select(2);
-            _map.CenterOn(p.Lat, p.Lng, 4f);
+            _map.CenterOn(p.Lat, p.Lng, 11f);
             _map.SelectCrag(id);
             _lblStatus.Text = $"map centred on {p.Title}";
         };
@@ -222,7 +222,8 @@ public sealed class MainForm : Form
         {
             _lblStatus.Text = "warming the crag map…";
             await EnsureCragPointsAsync();
-            _lblStatus.Text = "ready — Ctrl+F to search";
+            await MarkFreeCragsAsync(); // amber highlights from launch
+            _lblStatus.Text = $"ready — Ctrl+F to search  ·  {_cragPoints.Count(p => p.Free)} of {_cragPoints.Count:N0} crags are free samples";
         }
         catch { /* offline is fine; lists load on demand */ }
 
@@ -243,6 +244,7 @@ public sealed class MainForm : Form
         // (hooks above are used by the screenshot harness: shot.ps1)
 
         // Apply the persisted splitter width now that the layout has real sizes.
+        int freeCount = _cragPoints.Count(p => p.Free);
         // Min sizes keep the rail usable no matter what was saved or dragged.
         if (_contentSplit is { } split)
         {
@@ -251,7 +253,9 @@ public sealed class MainForm : Form
             try { split.SplitterDistance = Math.Clamp(_restoreSplitter, split.Panel1MinSize, split.Width - split.Panel2MinSize); }
             catch { split.SplitterDistance = 390; }
         }
-        _lblStatus.Text = "ready — Ctrl+F to search";
+        _lblStatus.Text = freeCount > 0
+            ? $"ready — Ctrl+F to search  ·  {freeCount} free-sample crags are amber on the CRAG MAP"
+            : "ready — Ctrl+F to search";
     }
 
     // ---- window state persistence ---------------------------------------------
@@ -601,19 +605,40 @@ public sealed class MainForm : Form
                 }), "all crags — busiest first", $"{points.Count:N0} crags — double-click to open · see the CRAG MAP tab");
         });
 
+    /// <summary>Marks every crag point with its free-sample status (map + lists read it).
+    /// One retry: this endpoint is as flaky as any other and the warm path swallows errors.</summary>
+    private async Task MarkFreeCragsAsync()
+    {
+        JsonDocument? free = null;
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            try
+            {
+                free = await _api.GetFreeCragsAsync();
+                break;
+            }
+            catch
+            {
+                if (attempt == 1) return;
+                await Task.Delay(400);
+            }
+        }
+        using (free)
+        {
+            var freeIds = new HashSet<int>(free!.RootElement.GetProperty("free_crags").EnumerateArray()
+                .Select(x => x.GetInt32()).Where(x => x != 0));
+            foreach (CragPoint p in _cragPoints) p.Free = freeIds.Contains(p.RockfaxId) || freeIds.Contains(p.UkcId);
+            _map.Points = _cragPoints; // repaint with amber free-sample highlights
+        }
+    }
+
     private Task LoadFreeCragsAsync()
         => RunAsync("loading free crags", async () =>
         {
-            Task<JsonDocument> freeTask = _api.GetFreeCragsAsync();
-            List<CragPoint> points = await EnsureCragPointsAsync();
-            using JsonDocument free = await freeTask;
+            await EnsureCragPointsAsync();
+            await MarkFreeCragsAsync();
 
-            var freeIds = new HashSet<int>(free.RootElement.GetProperty("free_crags").EnumerateArray()
-                .Select(x => x.GetInt32()).Where(x => x != 0));
-            foreach (CragPoint p in points) p.Free = freeIds.Contains(p.RockfaxId) || freeIds.Contains(p.UkcId);
-            _map.Points = _cragPoints; // repaint with amber free-sample highlights
-
-            SetLeftItems(points.Where(p => p.Free)
+            SetLeftItems(_cragPoints.Where(p => p.Free)
                 .Select(p =>
                 {
                     var item = new ListViewItem(p.Title);
@@ -621,7 +646,7 @@ public sealed class MainForm : Form
                     item.SubItems.Add("free sample");
                     item.Tag = p;
                     return (item, p.Title);
-                }), "free-sample crags", $"{points.Count(p => p.Free)} crags highlighted amber on the CRAG MAP");
+                }), "free-sample crags", $"{_cragPoints.Count(p => p.Free)} crags highlighted amber on the CRAG MAP");
         });
 
     private Task CragFilterAsync(string filter)

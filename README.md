@@ -196,11 +196,12 @@ drive it headlessly for captures):
 - **Crag pages** — clickable grade-band chips (Mod-VD / S-HS / VS-HVS / E1+) that
   filter the buttress-grouped route list, a seven-day weather card strip, crag
   photos, and an "on UKC" link.
-- **Crag map** — every UKC crag as a pannable, zoomable dot plot with a degree
-  graticule, glow-by-popularity, hover labels, on-canvas zoom controls, double-click
-  zoom, and free-sample crags in amber. Opening a crag anywhere rings its dot here.
-  The viewport is pinned to Britain + Ireland because the marker feed contains
-  overseas crags and bad rows.
+- **Crag map** — every UKC crag plotted over a real **OpenStreetMap basemap**
+  (standard OSM raster tiles, remapped to a dark slate so they fit the app;
+  Web Mercator slippy-map projection with an LRU tile cache). Pannable and
+  zoomable (wheel / buttons / double-click), hover labels, cluster counts in
+  dense areas, km scale bar, free-sample crags in amber. Opening a crag
+  anywhere rings its dot here. Basemap © OpenStreetMap contributors.
 - **Search & lists** — route search (Enter), crag filter, busiest-crags, free crags.
 - **Logbook** — sign in with your UKClimbing account for your ascents (UKC style
   names decoded, **climbing partners resolved to names and filterable via the
