@@ -215,7 +215,9 @@ drive it headlessly for captures):
   menus on every list (open · show on map · open on UKC · copy link), and a "?"
   About box lists attribution + shortcuts.
 - **Back / forward** — every route or crag you open pushes onto a navigation stack:
-  toolbar arrows or **Alt+←/→** walk back and forward through them.
+  toolbar arrows, **Alt+←/→**, or your **mouse's side buttons** walk back and forward
+  through them (the photo viewer steps with its side buttons too).
+- **Ctrl+Tab** cycles tabs.
 - **Recents** — routes and crags you open are remembered (newest first, capped at 20,
   stored only in `%LOCALAPPDATA%\RockfaxDesk\session.json`); on the next launch the
   rail offers them so you can pick up where you left off.

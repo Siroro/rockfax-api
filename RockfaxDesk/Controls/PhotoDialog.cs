@@ -52,6 +52,11 @@ internal sealed class PhotoDialog : Form
             if (e.KeyCode == Keys.Right) Step(1);
             if (e.KeyCode == Keys.Escape) Close();
         };
+        MouseUp += (_, e) => // mouse side buttons step through the gallery too
+        {
+            if (e.Button == MouseButtons.XButton1) Step(-1);
+            if (e.Button == MouseButtons.XButton2) Step(1);
+        };
         _box.Click += (_, _) => Close();
         MouseWheel += (_, e) => Step(e.Delta > 0 ? -1 : 1);
 
@@ -69,7 +74,7 @@ internal sealed class PhotoDialog : Form
     private async Task LoadPhoto()
     {
         (int id, string title, string author) = _photos[_index];
-        Text = $"Photo {id}  ({_index + 1}/{_photos.Count})";
+        Text = title.Length > 0 ? $"{title}  ({_index + 1}/{_photos.Count})" : $"Photo {id}  ({_index + 1}/{_photos.Count})";
         _caption.Text = $"{title}   \u2014   \u00a9 {author}";
         Image? full = await _images.GetFullAsync(id);
         if (full is null)

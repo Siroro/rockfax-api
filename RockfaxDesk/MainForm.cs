@@ -136,6 +136,7 @@ public sealed class MainForm : Form
 
         BuildLeftRail();
         BuildTabs();
+        if (_restoreTab >= 0) _tabs.Select(_restoreTab); // last session's tab; --goto hooks override later
 
         _routeView.Bind(_api, _images);
         _cragView.Bind(_api, _images);
@@ -239,6 +240,12 @@ public sealed class MainForm : Form
             }
             if (e.Alt && e.KeyCode == Keys.Left) { _ = GoBackAsync(); e.Handled = true; }
             if (e.Alt && e.KeyCode == Keys.Right) { _ = GoForwardAsync(); e.Handled = true; }
+            if (e.Control && e.KeyCode == Keys.Tab)
+            {
+                int next = (_tabs.SelectedIndex + (e.Shift ? 4 : 1)) % 5;
+                _tabs.Select(next);
+                e.Handled = true;
+            }
             if (e.KeyCode == Keys.F5) { await ReloadCurrentAsync(); e.Handled = true; }
             if (e.KeyCode == Keys.F1) { _btnHelp.PerformClick(); e.Handled = true; }
         };
@@ -344,7 +351,7 @@ public sealed class MainForm : Form
 
     private sealed record SavedWindowState(int X, int Y, int W, int H, int Splitter, bool Maximized,
                                            float MapZoom, float MapCenterLat, float MapCenterLng,
-                                           string LastSearch = "");
+                                           string LastSearch = "", int LastTab = 0);
 
     private void SaveWindowState()
     {
@@ -356,7 +363,7 @@ public sealed class MainForm : Form
             (float mz, float mlat, float mlng) = _map.GetView();
             var s = new SavedWindowState(bounds.X, bounds.Y, bounds.Width, bounds.Height,
                                     _contentSplit.SplitterDistance, WindowState == FormWindowState.Maximized,
-                                    mz, mlat, mlng, _txtSearch.Text);
+                                    mz, mlat, mlng, _txtSearch.Text, _tabs.SelectedIndex);
             File.WriteAllText(StatePath, System.Text.Json.JsonSerializer.Serialize(s));
         }
         catch { /* best effort */ }
@@ -364,6 +371,7 @@ public sealed class MainForm : Form
 
     private int _restoreSplitter = 390;
     private (float Zoom, float X, float Y)? _restoreMap;
+    private int _restoreTab = -1;
 
     private void RestoreWindowState()
     {
@@ -379,6 +387,7 @@ public sealed class MainForm : Form
             _restoreSplitter = s.Splitter;
             if (s.MapZoom > 0) _restoreMap = (s.MapZoom, s.MapCenterLat, s.MapCenterLng);
             if (!string.IsNullOrEmpty(s.LastSearch)) _txtSearch.Text = s.LastSearch; // restored, not auto-run
+            if (s.LastTab is >= 0 and <= 4) _restoreTab = s.LastTab;
             if (s.Maximized) WindowState = FormWindowState.Maximized;
         }
         catch { /* best effort */ }
@@ -416,7 +425,8 @@ public sealed class MainForm : Form
                 "Shortcuts:\n" +
                 "  Ctrl+F   focus search\n" +
                 "  Ctrl+1–5 switch tabs (route, crag, map, logbook, top 10)\n" +
-                "  Alt+←/→  back / forward through routes & crags you opened\n" +
+                "  Alt+←/→  back / forward through routes & crags (mouse side buttons work too)\n" +
+                "  Ctrl+Tab next tab (Shift for previous)\n" +
                 "  Enter    search / open selection\n" +
                 "  Esc      clear the search box\n" +
                 "  F5       refresh current route/crag/list\n" +
@@ -669,7 +679,14 @@ public sealed class MainForm : Form
         SessionStore.PushRecent(entry.Kind == NavEntry.KindRoute ? _session.RecentRoutes : _session.RecentCrags, entry);
         SessionStore.Save(_session);
         UpdateNavButtons();
+        if (!_navTipShown && _navBack.Count == 1)
+        {
+            _navTipShown = true;
+            _lblStatus.Text = "tip: Alt+← / → — or your mouse's side buttons — navigate back and forward";
+        }
     }
+
+    private bool _navTipShown;
 
     private void UpdateNavButtons()
     {
@@ -686,6 +703,21 @@ public sealed class MainForm : Form
         _current = entry;
         UpdateNavButtons();
         await OpenEntryAsync(entry);
+    }
+
+    // Mouse side buttons (and keyboard "browser" keys) drive navigation, browser-style.
+    private const int WM_APPCOMMAND = 0x0319;
+    private const int AppCommandBrowserBackward = 1, AppCommandBrowserForward = 2;
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WM_APPCOMMAND)
+        {
+            int command = (int)(((long)m.LParam >> 16) & 0x7FFF);
+            if (command == AppCommandBrowserBackward) { _ = GoBackAsync(); m.Result = (IntPtr)1; return; }
+            if (command == AppCommandBrowserForward) { _ = GoForwardAsync(); m.Result = (IntPtr)1; return; }
+        }
+        base.WndProc(ref m);
     }
 
     private async Task GoForwardAsync()
